@@ -27,6 +27,21 @@ Language support for DreamGUI `.dui` widget hierarchies.
   label, so the first compile answers "did this work" by appearing.
 - **A status bar item** showing whether symbols are loaded — a missing `.dui-symbols.json` is a
   visible warning with instructions, not a silent downgrade.
+- **Workspace navigation**: Ctrl+T over every id, style and resource in every .dui; F12 on a
+  nested `/Game/X` tag lands on the file whose class line declares it; find-references for
+  styles, resources and class paths.
+- **Rename (F2) that speaks the language**: styles and resources rename with every use; renaming
+  a node id **writes the `(was: OldId)` clause** so the next compile migrates graph references,
+  bindings and animations — and renaming back removes it. You are told when localization keys
+  change and how `@key` pins the old ones.
+- **Extract and inline**: a literal becomes an `@resource` (one occurrence or all of them),
+  selected property lines become a style the node wears, a worn style inlines back
+  base-first-derived-overriding.
+- **Compiler diagnostics, live**: with the Unreal editor running, every compile of a text-backed
+  class delivers its verdicts to `DUI/.dui-diagnostics.json`, and they appear in Problems as
+  `dui-compiler` — the semantic layer (unknown properties, bad values, missing binding functions)
+  beside the grammar-level checks, without this extension growing a second compiler. Hover shows
+  UPROPERTY tooltips and pasteable class defaults from the widened symbols dump.
 
 ## Where the smarts come from
 
