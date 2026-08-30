@@ -1,5 +1,12 @@
 src/**
+test/**
+out/src/**
+out/test/**
 node_modules/**
+.npm-cache/**
+.npmrc
+.gitignore
 tsconfig.json
 esbuild.js
+install-vscode-extension.ps1
 **/*.map
