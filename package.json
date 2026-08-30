@@ -1,0 +1,87 @@
+{
+  "name": "dreamui-language-support",
+  "displayName": "DreamUI Language Support",
+  "description": "Language support for DreamGUI .dui widget hierarchies: completion, hover, outline, diagnostics, driven by symbols the Unreal plugin exports.",
+  "version": "0.1.0",
+  "publisher": "typedreammoon",
+  "author": {
+    "name": "TypeDreamMoon"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "dreamui",
+    "dreamgui",
+    "dui",
+    "unreal",
+    "ui",
+    "widget"
+  ],
+  "activationEvents": [
+    "onLanguage:dui",
+    "workspaceContains:**/*.dui"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "dui",
+        "aliases": [
+          "DreamUI",
+          "dui"
+        ],
+        "extensions": [
+          ".dui"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dui",
+        "scopeName": "source.dui",
+        "path": "./syntaxes/dui.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dui",
+        "path": "./snippets/dui.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dreamui.reloadSymbols",
+        "title": "DreamUI: Reload Symbols (.dui-symbols.json)",
+        "icon": "$(refresh)"
+      }
+    ],
+    "configuration": {
+      "title": "DreamUI",
+      "properties": {
+        "dreamui.symbolsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to .dui-symbols.json. Empty = search each workspace folder's DUI/ directory and the folders above the open file."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "package": "npx --yes @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0"
+  }
+}

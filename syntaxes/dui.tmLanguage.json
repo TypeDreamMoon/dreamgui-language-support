@@ -1,0 +1,150 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DreamUI",
+  "scopeName": "source.dui",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#class-line" },
+    { "include": "#resources-block" },
+    { "include": "#style-declaration" },
+    { "include": "#slot-declaration" },
+    { "include": "#loop-header" },
+    { "include": "#component-line" },
+    { "include": "#slot-property" },
+    { "include": "#key-override" },
+    { "include": "#event-route" },
+    { "include": "#binding" },
+    { "include": "#property-assignment" },
+    { "include": "#node-header" },
+    { "include": "#values" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.dui", "match": "//.*$" },
+        { "name": "comment.block.dui", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "class-line": {
+      "match": "^\\s*(class)\\s+(/[\\w/.]+)",
+      "captures": {
+        "1": { "name": "keyword.control.class.dui" },
+        "2": { "name": "entity.name.namespace.dui" }
+      }
+    },
+    "resources-block": {
+      "begin": "^\\s*(resources)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.resources.dui" },
+        "2": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "match": "^\\s*(Color|Number|Vector2|String|Asset)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(=)",
+          "captures": {
+            "1": { "name": "storage.type.resource.dui" },
+            "2": { "name": "variable.other.constant.resource.dui" },
+            "3": { "name": "keyword.operator.assignment.dui" }
+          }
+        },
+        { "include": "#values" }
+      ]
+    },
+    "style-declaration": {
+      "match": "^\\s*(style)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*))?",
+      "captures": {
+        "1": { "name": "keyword.control.style.dui" },
+        "2": { "name": "entity.name.type.style.dui" },
+        "3": { "name": "punctuation.separator.inheritance.dui" },
+        "4": { "name": "entity.other.inherited-class.style.dui" }
+      }
+    },
+    "slot-declaration": {
+      "match": "^\\s*(slot)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "captures": {
+        "1": { "name": "keyword.control.slot.dui" },
+        "2": { "name": "entity.name.tag.namedslot.dui" }
+      }
+    },
+    "loop-header": {
+      "match": "^\\s*(for|each)\\s+([\\w\\u00A0-\\uFFFF]+)\\s+(in)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.loop.dui" },
+        "2": { "name": "variable.parameter.loop.dui" },
+        "3": { "name": "keyword.control.loop.dui" }
+      }
+    },
+    "component-line": {
+      "match": "^\\s*(\\+)\\s*([A-Za-z_/][\\w/.]*)",
+      "captures": {
+        "1": { "name": "keyword.operator.component.dui" },
+        "2": { "name": "entity.name.type.component.dui" }
+      }
+    },
+    "slot-property": {
+      "match": "(@slot)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)",
+      "captures": {
+        "1": { "name": "keyword.control.directive.slot.dui" },
+        "2": { "name": "variable.other.property.slot.dui" }
+      }
+    },
+    "key-override": {
+      "match": "(@key)\\s*(\\()",
+      "captures": {
+        "1": { "name": "keyword.control.directive.key.dui" },
+        "2": { "name": "punctuation.section.parens.begin.dui" }
+      }
+    },
+    "event-route": {
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "captures": {
+        "1": { "name": "variable.other.event.dui" },
+        "2": { "name": "keyword.operator.event-route.dui" },
+        "3": { "name": "entity.name.function.handler.dui" }
+      }
+    },
+    "binding": {
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<-)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\(\\))?",
+      "captures": {
+        "1": { "name": "variable.other.property.dui" },
+        "2": { "name": "keyword.operator.binding.dui" },
+        "3": { "name": "entity.name.function.binding.dui" },
+        "4": { "name": "punctuation.section.parens.dui" }
+      }
+    },
+    "property-assignment": {
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)",
+      "captures": {
+        "1": { "name": "variable.other.property.dui" },
+        "2": { "name": "keyword.operator.assignment.dui" }
+      }
+    },
+    "node-header": {
+      "match": "^\\s*([A-Za-z_/][\\w/.]*)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*))?\\s*\\{?",
+      "captures": {
+        "1": { "name": "entity.name.tag.dui" },
+        "2": { "name": "entity.name.section.id.dui" },
+        "3": { "name": "punctuation.section.parens.begin.dui" },
+        "4": { "name": "keyword.control.was.dui" },
+        "5": { "name": "punctuation.separator.dui" },
+        "6": { "name": "entity.name.section.oldid.dui" },
+        "7": { "name": "punctuation.section.parens.end.dui" },
+        "8": { "name": "punctuation.separator.style.dui" },
+        "9": { "name": "entity.other.inherited-class.style.dui" }
+      }
+    },
+    "values": {
+      "patterns": [
+        { "name": "string.quoted.double.dui", "begin": "\"", "end": "\"", "patterns": [ { "name": "constant.character.escape.dui", "match": "\\\\." } ] },
+        { "name": "constant.other.color.dui", "match": "#[0-9A-Fa-f]{3,8}\\b" },
+        { "name": "constant.numeric.dui", "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" },
+        { "name": "variable.other.constant.resource-ref.dui", "match": "@[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*" },
+        { "name": "constant.language.boolean.dui", "match": "\\b(true|false|None)\\b" },
+        { "name": "entity.name.namespace.assetpath.dui", "match": "/[\\w/.]+" }
+      ]
+    }
+  }
+}

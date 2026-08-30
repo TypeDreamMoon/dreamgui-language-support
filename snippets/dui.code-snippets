@@ -1,0 +1,81 @@
+{
+  "Widget file skeleton": {
+    "prefix": "dui-file",
+    "body": [
+      "// ${TM_FILENAME}",
+      "class ${1:/Game/UI/WBP_${TM_FILENAME_BASE}}",
+      "",
+      "Widget Root {",
+      "    AnchorData.AnchorMin = (0, 0)",
+      "    AnchorData.AnchorMax = (1, 1)",
+      "    AnchorData.SizeDelta = (0, 0)",
+      "",
+      "    + Overlay {}",
+      "",
+      "    $0",
+      "}"
+    ],
+    "description": "A root that fills its canvas, with an Overlay to lay children out"
+  },
+  "Resources block": {
+    "prefix": "resources",
+    "body": [
+      "resources {",
+      "    Color  ${1:Accent} = ${2:#FF6600}",
+      "    Number ${3:Gap}    = ${4:8}",
+      "    $0",
+      "}"
+    ],
+    "description": "Named constants, referenced as @Name and editable in Class Defaults"
+  },
+  "Style": {
+    "prefix": "style",
+    "body": [
+      "style ${1:Label} {",
+      "    ${2:FontSize} = ${3:18}",
+      "    $0",
+      "}"
+    ]
+  },
+  "Derived style": {
+    "prefix": "style-derived",
+    "body": [
+      "style ${1:Danger} : ${2:Base} {",
+      "    $0",
+      "}"
+    ]
+  },
+  "Text node": {
+    "prefix": "text",
+    "body": [
+      "Text ${1:Label} {",
+      "    Text = \"${2:...}\"",
+      "    $0",
+      "}"
+    ]
+  },
+  "Centered card": {
+    "prefix": "card",
+    "body": [
+      "Widget ${1:Card} {",
+      "    @slot HorizontalAlignment = Center",
+      "    @slot VerticalAlignment   = Center",
+      "    + SizeBox {",
+      "        bOverrideWidth  = true",
+      "        WidthOverride   = ${2:520}",
+      "    }",
+      "    $0",
+      "}"
+    ]
+  },
+  "Event route": {
+    "prefix": "on",
+    "body": ["${1:OnClicked} -> ${2:Handler}"],
+    "description": "Route an assignable event to a UFUNCTION on the user widget"
+  },
+  "Property binding": {
+    "prefix": "bind",
+    "body": ["${1:Text} <- ${2:GetTitle}()"],
+    "description": "Drive a property from a no-argument function every frame"
+  }
+}
