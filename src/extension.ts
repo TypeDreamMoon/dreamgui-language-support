@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { SymbolStore } from './symbols';
 import { registerFeatures } from './features';
 import { registerDiagnostics } from './diagnostics';
+import { registerColors } from './colors';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -23,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     registerFeatures(context, store);
     registerDiagnostics(context, store);
+    registerColors(context);
 }
 
 export function deactivate(): void {}
