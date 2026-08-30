@@ -60,8 +60,22 @@
         "command": "dreamui.reloadSymbols",
         "title": "DreamUI: Reload Symbols (.dui-symbols.json)",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "dreamui.newFile",
+        "title": "DreamUI: New .dui File",
+        "icon": "$(new-file)"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "dreamui.newFile",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@30"
+        }
+      ]
+    },
     "configuration": {
       "title": "DreamUI",
       "properties": {
