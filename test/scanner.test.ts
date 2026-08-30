@@ -1,0 +1,189 @@
+/**
+ * The lexer, held to the compiler's behaviour. Structure of this file: one block per DUI1xxx code
+ * with at least one positive and one negative case, then the token-shape facts the port has to
+ * preserve (arrow before number, comments before paths, CRLF line counting, CJK identifiers), then
+ * the fixture sweep -- a real .dui from the project must produce zero lexical diagnostics.
+ */
+import { test } from 'node:test';
+import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { scan, Token } from '../src/core/scanner';
+
+function kinds(source: string): string[] {
+    return scan(source).tokens.map((token) => token.kind);
+}
+
+function codes(source: string): number[] {
+    return scan(source).diagnostics.map((diagnostic) => diagnostic.code);
+}
+
+function nonSeparator(source: string): Token[] {
+    return scan(source).tokens.filter((token) => token.kind !== 'separator' && token.kind !== 'end');
+}
+
+// ---- DUI1001 unexpected character --------------------------------------------------------------
+
+test('DUI1001: a run of unlexable characters is one diagnostic, not many', () => {
+    const result = scan('Widget Root {\n    $$$^^\n}\n');
+    assert.deepEqual(result.diagnostics.map((d) => d.code), [1001]);
+    assert.match(result.diagnostics[0].message, /cannot begin anything/);
+    assert.equal(result.diagnostics[0].line, 2);
+});
+
+test('DUI1001: every punctuation mark the grammar owns lexes clean', () => {
+    assert.deepEqual(codes('{ } ( ) , . : = + @ ; -> <- #FFF "x" /Game/A -3 Name'), []);
+});
+
+test('DUI1001: a lone < is unexpected, but never swallows an adjacent <-', () => {
+    const result = scan('A << B');
+    assert.deepEqual(result.diagnostics.map((d) => d.code), [1001]);
+    const okay = scan('A <<- B');
+    // The run takes the first '<' and stops before the arrow.
+    assert.deepEqual(okay.diagnostics.map((d) => d.code), [1001]);
+    assert.ok(okay.tokens.some((token) => token.kind === 'arrow'));
+});
+
+// ---- DUI1002 unterminated string ---------------------------------------------------------------
+
+test('DUI1002: a string that reaches end of line unclosed', () => {
+    assert.deepEqual(codes('Text = "hello\nFontSize = 12\n'), [1002]);
+});
+
+test('DUI1002: closed strings decode their escapes', () => {
+    const result = scan('Text = "a\\"b\\\\c\\nd"');
+    assert.deepEqual(result.diagnostics, []);
+    const literal = result.tokens.find((token) => token.kind === 'string')!;
+    assert.equal(literal.text, 'a"b\\c\nd');
+});
+
+test('an undefined escape keeps both characters instead of eating the backslash', () => {
+    const literal = scan('Text = "a\\qb"').tokens.find((token) => token.kind === 'string')!;
+    assert.equal(literal.text, 'a\\qb');
+});
+
+// ---- DUI1003 unterminated comment --------------------------------------------------------------
+
+test('DUI1003: a block comment that never closes', () => {
+    assert.deepEqual(codes('Widget Root {\n/* forever\n}\n'), [1003]);
+});
+
+test('a block comment that crosses lines still ends the statement it started on', () => {
+    const result = scan('A = 1 /* x\n y */ B = 2');
+    assert.deepEqual(result.diagnostics, []);
+    // ... via a synthetic separator between the two statements.
+    const sequence = result.tokens.map((token) => token.kind);
+    const aIndex = sequence.indexOf('number');
+    assert.ok(sequence.slice(aIndex + 1).includes('separator'));
+});
+
+test('block comments move the line counter', () => {
+    const result = scan('/* a\nb\nc */\nWidget Root {}\n');
+    const widget = result.tokens.find((token) => token.kind === 'identifier')!;
+    assert.equal(widget.line, 4);
+});
+
+// ---- DUI1004 malformed number ------------------------------------------------------------------
+
+test('DUI1004: two decimal points, a trailing dot, a lone minus, a broken exponent', () => {
+    assert.deepEqual(codes('A = 1.2.3'), [1004]);
+    assert.deepEqual(codes('A = 12.'), [1004]);
+    assert.deepEqual(codes('A = -'), [1004]);
+    assert.deepEqual(codes('A = 400e'), [1004]);
+    assert.deepEqual(codes('A = 1e+'), [1004]);
+    assert.deepEqual(codes('A = -3px'), [1004]);
+});
+
+test('DUI1004: the shapes the designer writes back all lex clean', () => {
+    assert.deepEqual(codes('A = -12\nB = 0.95\nC = 1e-45\nD = 1e+20\nE = 3.25E5'), []);
+});
+
+test('24px is not reported by the lexer: digit-leading words are the parser position\'s call', () => {
+    const result = scan('A = 24px');
+    assert.deepEqual(result.diagnostics, []);
+    const number = result.tokens.find((token) => token.kind === 'number')!;
+    assert.equal(number.digitLeadingWord, true);
+    assert.equal(number.text, '24px');
+});
+
+test('a dot with no digit after it stays a dot token, not part of the number', () => {
+    assert.deepEqual(kinds('AnchorData.SizeDelta = (0, 28)').slice(0, 3),
+        ['identifier', 'dot', 'identifier']);
+});
+
+// ---- DUI1005 malformed hex colour --------------------------------------------------------------
+
+test('DUI1005: wrong digit counts and non-hex digits', () => {
+    assert.deepEqual(codes('A = #12345'), [1005]);
+    assert.deepEqual(codes('A = #GGG'), [1005]);
+    assert.deepEqual(codes('A = #FF'), [1005]);
+});
+
+test('DUI1005: 3, 4, 6 and 8 digits are the colours', () => {
+    const result = scan('A = #FFF\nB = #FFFF\nC = #1B1D23\nD = #AABBCCDD\nE = #0077ff');
+    assert.deepEqual(result.diagnostics, []);
+    const colors = result.tokens.filter((token) => token.kind === 'hexColor').map((token) => token.text);
+    assert.deepEqual(colors, ['FFF', 'FFFF', '1B1D23', 'AABBCCDD', '0077ff']);
+});
+
+// ---- token shapes the port must preserve -------------------------------------------------------
+
+test('-> lexes as the event arrow, not a malformed negative', () => {
+    assert.deepEqual(nonSeparator('OnClicked -> Confirm').map((token) => token.kind),
+        ['identifier', 'eventArrow', 'identifier']);
+});
+
+test('<- lexes as the binding arrow', () => {
+    assert.deepEqual(nonSeparator('Text <- GetTitle()').map((token) => token.kind),
+        ['identifier', 'arrow', 'identifier', 'openParen', 'closeParen']);
+});
+
+test('a comment can contain an asset path without producing a path token', () => {
+    assert.deepEqual(nonSeparator('// see /Game/UI/WBP_X\nA = 1').map((token) => token.kind),
+        ['identifier', 'equals', 'number']);
+});
+
+test('asset paths take engine spelling, dots and CJK included', () => {
+    const result = scan('Font = /Game/UI/字体/WBP_Card.WBP_Card_C');
+    assert.deepEqual(result.diagnostics, []);
+    const asset = result.tokens.find((token) => token.kind === 'assetPath')!;
+    assert.equal(asset.text, '/Game/UI/字体/WBP_Card.WBP_Card_C');
+});
+
+test('CJK identifiers are ordinary identifiers', () => {
+    const tokens = nonSeparator('Text 标题 { }');
+    assert.deepEqual(tokens.map((token) => token.kind), ['identifier', 'identifier', 'openBrace', 'closeBrace']);
+    assert.equal(tokens[1].text, '标题');
+});
+
+test('a semicolon is a separator, exactly like a newline', () => {
+    assert.deepEqual(kinds('A = 1; B = 2').filter((kind) => kind === 'separator').length, 1);
+});
+
+test('line and column are 1-based and agree across LF, CRLF and CR', () => {
+    for (const lineBreak of ['\n', '\r\n', '\r']) {
+        const result = scan(`Widget Root {${lineBreak}    FontSize = 18${lineBreak}}`);
+        const fontSize = result.tokens.find((token) => token.text === 'FontSize')!;
+        assert.equal(fontSize.line, 2, `line break ${JSON.stringify(lineBreak)}`);
+        assert.equal(fontSize.column, 5, `line break ${JSON.stringify(lineBreak)}`);
+    }
+});
+
+test('token offsets slice the source back out verbatim', () => {
+    const source = 'Image ConfirmButton {\n    Brush.TintColor = #0077ff\n}';
+    const result = scan(source);
+    for (const token of result.tokens) {
+        if (token.kind === 'identifier' || token.kind === 'assetPath' || token.kind === 'number') {
+            assert.equal(source.slice(token.start, token.end), token.text);
+        }
+    }
+});
+
+// ---- fixture sweep -----------------------------------------------------------------------------
+
+test('the real SettingsPanel.dui produces zero lexical diagnostics', () => {
+    const fixture = fs.readFileSync(path.join(__dirname, '..', '..', 'test', 'fixtures', 'SettingsPanel.dui'), 'utf8');
+    const result = scan(fixture);
+    assert.deepEqual(result.diagnostics, []);
+    assert.ok(result.tokens.length > 100);
+});

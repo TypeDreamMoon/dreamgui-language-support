@@ -1,0 +1,183 @@
+// A settings panel, written as text.
+//
+// Layout is done with containers and alignment, not with anchor arithmetic: every position here is
+// "which edge of my parent do I sit against", and the only numbers left are sizes that genuinely
+// have to be authored -- a divider's thickness, a button's height. Anchors appear exactly once, on
+// the root, spelled as the fill idiom.
+class /Game/UI/WBP_SettingsPanel
+
+style Label {
+    FontSize = 18
+    HAlign   = Left
+}
+
+Widget Root {
+    AnchorData.AnchorMin = (0, 0)
+    AnchorData.AnchorMax = (1, 1)
+    AnchorData.SizeDelta = (0, 0)
+
+    + Overlay {}
+
+    Widget Card {
+        @slot HorizontalAlignment = Center
+        @slot VerticalAlignment   = Center
+
+        // SizeBox, not an authored SizeDelta: an Overlay slot with alignment hands its child the
+        // child's DESIRED size, so a plain widget collapses to whatever its content measures. This
+        // is the UMG answer to "exactly this big, centred".
+        + SizeBox {
+            bOverrideWidth  = true
+            WidthOverride   = 520
+            bOverrideHeight = true
+            HeightOverride  = 420
+        }
+
+      Widget CardBody {
+        + Overlay {}
+
+        Image Backdrop {
+            Brush.TintColor = #1B1D23
+            @slot HorizontalAlignment = Fill
+            @slot VerticalAlignment   = Fill
+        }
+
+        Widget Content {
+            @slot HorizontalAlignment = Fill
+            @slot VerticalAlignment   = Fill
+            @slot Padding = (24, 24, 24, 24)
+
+            + VerticalBox {
+                Spacing = 12
+            }
+
+            Text Title {
+                Font     = /DreamGUI/DefaultFont_DistanceField
+                Text     = "Settings"
+                FontSize = 32
+                HAlign   = Left
+                @slot HorizontalAlignment = Fill
+                @slot SizeRule = Auto
+            }
+
+            Image Divider {
+                Brush.ImageSize = (0, 2)
+                Brush.TintColor = #3A3F4B
+                @slot HorizontalAlignment = Fill
+                @slot SizeRule = Auto
+                @slot Padding = (0, 0, 0, 15)
+            }
+
+            Widget Rows {
+                @slot HorizontalAlignment = Fill
+                @slot SizeRule = Fill
+
+                + VerticalBox {
+                    Spacing = 15
+                    Padding = (15, 15, 15, 15)
+                }
+
+                Text ResolutionLabel : Label {
+                    AnchorData.SizeDelta = (0, 28)
+                    Font = /DreamGUI/DefaultFont_DistanceField
+                    Text = "分辨率"
+                    @slot HorizontalAlignment = Fill
+                    @slot SizeRule = Fill
+                    @slot VerticalAlignment = Center
+                }
+
+                Text VolumeLabel : Label {
+                    AnchorData.SizeDelta = (0, 28)
+                    Font = /DreamGUI/DefaultFont_DistanceField
+                    Text = "音量"
+                    @slot HorizontalAlignment = Fill
+                    @slot SizeRule = Fill
+                    @slot VerticalAlignment = Center
+                }
+
+                Text LanguageLabel : Label {
+                    AnchorData.SizeDelta = (0, 28)
+                    Font = /DreamGUI/DefaultFont_DistanceField
+                    Text = "语言"
+                    @slot HorizontalAlignment = Fill
+                    @slot SizeRule = Fill
+                    @slot VerticalAlignment = Center
+                }
+            }
+
+            Widget Buttons {
+                AnchorData.SizeDelta = (0, 44)
+                @slot HorizontalAlignment = Right
+                @slot SizeRule = Auto
+                @slot Padding = (15, 15, 15, 15)
+
+                + HorizontalBox {
+                    Spacing = 12
+                }
+
+                Image CancelButton {
+                    // An Image's desired size IS its brush size, which is what an Auto slot asks for.
+                    Brush.ImageSize = (120, 44)
+                    Brush.TintColor = #343946
+                    @slot SizeRule = Auto
+                    @slot VerticalAlignment = Fill
+                    @slot Padding = (15, 15, 15, 15)
+
+                    + Overlay {}
+                    + UIButton {
+                        NormalColor  = #FFFFFF
+                        HoveredColor = #C8D4EC
+                        PressedColor = #9AB0D8
+                    }
+
+                    Text CancelLabel {
+                        Font     = /DreamGUI/DefaultFont_DistanceField
+                        Text     = "取消"
+                        FontSize = 18
+                        @slot HorizontalAlignment = Fill
+                        @slot VerticalAlignment   = Fill
+                    }
+                }
+
+                Image ConfirmButton {
+                    Brush.ImageSize = (160, 44)
+                    Brush.TintColor = #0077ff
+                    @slot SizeRule = Auto
+                    @slot VerticalAlignment = Fill
+                    RelativeRotationEuler = (0, 35, 15)
+                    @slot Padding = (15, 15, 15, 15)
+                    RenderOpacity = 1
+
+                    + Overlay {}
+                    + UIButton {
+                        NormalColor  = #FFFFFF
+                        HoveredColor = #C8D4EC
+                        PressedColor = #9AB0D8
+                    }
+
+                    Text ConfirmLabel {
+                        Font     = /DreamGUI/DefaultFont_DistanceField
+                        Text     = "确定"
+                        FontSize = 18
+                        @slot HorizontalAlignment = Fill
+                        @slot VerticalAlignment   = Fill
+                        RelativeRotationEuler = (0, 0, 0)
+                    }
+                }
+            }
+        }
+
+      }
+    }
+
+    Widget Misc {
+        @slot HorizontalAlignment = Left
+        @slot VerticalAlignment   = Top
+
+        + Overlay {
+        }
+
+        Text TestText : Label {
+            Text = "This is a test text to see if the settings panel is working correctly."
+        }
+    }
+}
