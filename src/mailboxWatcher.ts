@@ -107,7 +107,7 @@ export class MailboxWatcher implements vscode.Disposable {
             const diagnostics = mailboxDiagnosticsToShow(entry).map((source) => {
                 const position = new vscode.Position(Math.max(0, source.line - 1), Math.max(0, source.column - 1));
                 // With the document at hand the squiggle covers the word; blind, one character.
-                const range = open?.getWordRangeAtPosition(position, /[@#\w. -￿]+/u)
+                const range = open?.getWordRangeAtPosition(position, /[@#\w.\u00A0-\uFFFF]+/u)
                     ?? new vscode.Range(position, position.translate(0, 1));
                 const diagnostic = new vscode.Diagnostic(range,
                     `${formatCode(source.code)}: ${source.message}`,

@@ -75,7 +75,7 @@ export function registerBridgeCompletion(context: vscode.ExtensionContext, bridg
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider({ language: 'dui' }, {
         async provideCompletionItems(document, position) {
             const line = document.lineAt(position.line).text.slice(0, position.character);
-            if (!/^\s*\/[\w/. -￿]*$/u.test(line)) {
+            if (!/^\s*\/[\w/.\u00A0-\uFFFF]*$/u.test(line)) {
                 return undefined;
             }
             await workspace.ensureScanned();
@@ -110,8 +110,8 @@ export function registerBridgeCompletion(context: vscode.ExtensionContext, bridg
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider({ language: 'dui' }, {
         async provideCompletionItems(document, position) {
             const line = document.lineAt(position.line).text.slice(0, position.character);
-            const wantsBinding = /<-\s*[\w -￿]*$/u.test(line);
-            const wantsHandler = !wantsBinding && /->\s*[\w -￿]*$/u.test(line);
+            const wantsBinding = /<-\s*[\w\u00A0-\uFFFF]*$/u.test(line);
+            const wantsHandler = !wantsBinding && /->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
             if (!wantsBinding && !wantsHandler) {
                 return undefined;
             }

@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { SymbolStore, PropertyInfo } from './symbols';
 import { buildModel, scopeAt } from './docmodel';
+import { analyzeLine } from './core/completionContext';
 
 const TAG_ONLY_KEYWORDS = ['style', 'resources', 'slot', 'for', 'each'];
 
@@ -37,10 +38,11 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             const model = buildModel(document);
             const scope = scopeAt(document, position);
             const items: vscode.CompletionItem[] = [];
+            const lineContext = analyzeLine(line);
 
             // `@` in value position: this file's resources. ('@slot'/'@key' keep working: they are
             // offered too, and the author picking a resource name was the whole point.)
-            if (/@[\w -￿]*$/u.test(line)) {
+            if (lineContext.kind === 'resourceRef') {
                 for (const entry of model.resources) {
                     const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Constant);
                     item.detail = `${entry.type} = ${entry.valueText}`;
@@ -55,15 +57,18 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             }
 
             // After '=': the value. Enum values when the property names an enum; booleans; resources.
-            const assignment = /([\w. -￿]+)\s*=\s*[\w -￿]*$/u.exec(line);
-            if (assignment) {
-                const propertyName = assignment[1].trim();
-                const list = scope?.kind === 'component'
-                    ? store.componentInfo(scope.name)?.properties ?? []
-                    : /@slot\s/.test(line)
-                        ? store.symbols?.slotProperties ?? []
-                        : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
-                const info = store.findProperty(list, propertyName);
+            // The property face follows where the line stands: '@slot' lines are the panel slot's,
+            // component blocks the component's, style bodies the union of every tag (a style can be
+            // worn by any of them), nodes their tag's.
+            if (lineContext.kind === 'value') {
+                const list = lineContext.isSlot
+                    ? store.symbols?.slotProperties ?? []
+                    : scope?.kind === 'component'
+                        ? store.componentInfo(scope.name)?.properties ?? []
+                        : scope?.kind === 'style'
+                            ? store.propertiesForStyle()
+                            : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
+                const info = store.findProperty(list, lineContext.property);
                 for (const value of store.enumValues(info?.enum)) {
                     items.push(new vscode.CompletionItem(value, vscode.CompletionItemKind.EnumMember));
                 }
@@ -80,7 +85,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             }
 
             // After '+': components, from the compiler's own resolvable set.
-            if (/^\s*\+\s*[\w/ -￿]*$/u.test(line)) {
+            if (lineContext.kind === 'componentName') {
                 for (const [name, info] of Object.entries(store.symbols?.components ?? {})) {
                     const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Class);
                     item.detail = info.class;
@@ -91,7 +96,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             }
 
             // After '@slot ': the panel slot's properties.
-            if (/@slot\s+[\w. -￿]*$/u.test(line)) {
+            if (lineContext.kind === 'slotPropertyName') {
                 for (const info of store.symbols?.slotProperties ?? []) {
                     items.push(propertyItem(info));
                 }
@@ -99,9 +104,19 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             }
 
             // After ':' on a node header or style header: this file's styles.
-            if (/:\s*[\w -￿]*$/u.test(line) && !/=\s/.test(line)) {
+            if (lineContext.kind === 'styleRef') {
                 for (const style of model.styles) {
                     items.push(new vscode.CompletionItem(style.name, vscode.CompletionItemKind.Color));
+                }
+                return items;
+            }
+
+            // Inside a style body: the union property face -- any tag may wear this style, so any
+            // tag's properties are honest offers. (This scope had NO branch before: style bodies
+            // fell through to top-level tags, which is why HAlign offered nothing there.)
+            if (scope?.kind === 'style') {
+                for (const property of store.propertiesForStyle()) {
+                    items.push(propertyItem(property));
                 }
                 return items;
             }
@@ -173,7 +188,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
     context.subscriptions.push(vscode.languages.registerHoverProvider(selector, {
         provideHover(document, position) {
             store.ensureLoadedFor(document.uri.fsPath);
-            const range = document.getWordRangeAtPosition(position, /[@\w. -￿]+/u);
+            const range = document.getWordRangeAtPosition(position, /[@\w.\u00A0-\uFFFF]+/u);
             if (!range) {
                 return undefined;
             }
@@ -210,7 +225,9 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             }
             const list = scope?.kind === 'component'
                 ? store.componentInfo(scope.name)?.properties ?? []
-                : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
+                : scope?.kind === 'style'
+                    ? store.propertiesForStyle()
+                    : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
             const property = store.findProperty(
                 [...list, ...(symbols?.slotProperties ?? [])], word);
             if (property) {
@@ -267,7 +284,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
     // ---- definition: @Name -> its entry; a style use -> its declaration ------------------------
     context.subscriptions.push(vscode.languages.registerDefinitionProvider(selector, {
         provideDefinition(document, position) {
-            const range = document.getWordRangeAtPosition(position, /[@\w -￿]+/u);
+            const range = document.getWordRangeAtPosition(position, /[@\w\u00A0-\uFFFF]+/u);
             if (!range) {
                 return undefined;
             }

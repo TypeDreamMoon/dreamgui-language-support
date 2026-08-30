@@ -110,7 +110,7 @@ export function registerEditing(context: vscode.ExtensionContext): void {
                 if (chain.range.contains(lineRange) && !chain.range.isEqual(lineRange)) {
                     chain = new vscode.SelectionRange(lineRange, chain);
                 }
-                const word = document.getWordRangeAtPosition(position, /[@#\w. -￿]+/u);
+                const word = document.getWordRangeAtPosition(position, /[@#\w.\u00A0-\uFFFF]+/u);
                 if (word && chain.range.contains(word) && !chain.range.isEqual(word)) {
                     chain = new vscode.SelectionRange(word, chain);
                 }

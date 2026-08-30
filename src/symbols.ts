@@ -158,6 +158,31 @@ export class SymbolStore {
         return out;
     }
 
+    /**
+     * The property face of a style body. A style can be worn by a node of ANY tag, so its lines
+     * can land on any visual: the honest completion set is the union of every tag's properties
+     * plus the widget's, first spelling wins on a name shared across tags.
+     */
+    propertiesForStyle(): PropertyInfo[] {
+        if (!this.data) {
+            return [];
+        }
+        const seen = new Map<string, PropertyInfo>();
+        for (const info of Object.values(this.data.tags)) {
+            for (const property of info.properties ?? []) {
+                if (!seen.has(property.name)) {
+                    seen.set(property.name, property);
+                }
+            }
+        }
+        for (const property of this.data.widgetProperties ?? []) {
+            if (!seen.has(property.name)) {
+                seen.set(property.name, property);
+            }
+        }
+        return [...seen.values()];
+    }
+
     eventsForTag(tag: string | undefined): string[] {
         if (!this.data) {
             return [];
