@@ -202,6 +202,10 @@ export class WorkspaceIndex {
         return this.files.get(file);
     }
 
+    allSummaries(): IterableIterator<FileSummary> {
+        return this.files.values();
+    }
+
     /** The file whose class line declares this asset (package-path comparison, case-insensitive). */
     fileForClass(assetPath: string): FileSummary | undefined {
         const wanted = packagePathOf(assetPath);

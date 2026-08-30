@@ -50,7 +50,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerRename(context);
     registerRefactors(context);
     const bridge = registerBridge(context);
-    const bridgeCache = registerBridgeCompletion(context, bridge);
+    const bridgeCache = registerBridgeCompletion(context, bridge, workspaceHost);
     context.subscriptions.push(vscode.commands.registerCommand('dreamui.clearBridgeCache', () => {
         bridgeCache.clear();
         vscode.window.showInformationMessage('DreamUI: bridge caches cleared.');
