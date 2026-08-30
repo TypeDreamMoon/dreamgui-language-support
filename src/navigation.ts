@@ -5,7 +5,7 @@
  */
 import * as vscode from 'vscode';
 import { WorkspaceIndexHost } from './workspace';
-import { SymbolSite } from './core/workspaceIndex';
+import { SymbolSite, referencesAt } from './core/workspaceIndex';
 
 function siteLocation(site: SymbolSite): vscode.Location {
     return new vscode.Location(vscode.Uri.file(site.file),
@@ -52,6 +52,24 @@ export function registerNavigation(context: vscode.ExtensionContext, host: Works
                 targetSelectionRange: targetSelection,
             };
             return [link];
+        },
+    }));
+
+    // ---- references: styles and resources in-file (the language scopes them so), class paths
+    // across the workspace. Node ids get no answer on purpose -- their references live in
+    // Blueprints, where this layer has no business guessing.
+    context.subscriptions.push(vscode.languages.registerReferenceProvider({ language: 'dui' }, {
+        async provideReferences(document, position, referenceContext) {
+            await host.ensureScanned();
+            const answer = referencesAt(host.index, document.uri.fsPath, document.offsetAt(position));
+            if (!answer) {
+                return undefined;
+            }
+            const sites = [...answer.uses];
+            if (referenceContext.includeDeclaration && answer.declaration) {
+                sites.unshift(answer.declaration);
+            }
+            return sites.map(siteLocation);
         },
     }));
 }

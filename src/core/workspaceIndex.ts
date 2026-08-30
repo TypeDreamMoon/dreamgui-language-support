@@ -132,6 +132,53 @@ export interface WorkspaceSymbolHit {
     site: SymbolSite;
 }
 
+export interface ReferenceAnswer {
+    declaration?: NamedSymbol;
+    /** Use sites, declaration not included. */
+    uses: NamedSymbol[];
+}
+
+/**
+ * What the word at `offset` in `file` refers to, and everywhere it is used. Styles and resources
+ * are file-local by language rule, so their uses stay in-file; a class path (the class line or a
+ * nested tag) crosses files: its uses are every nesting site in the workspace.
+ * Node ids get no answer -- nothing in the TEXT can reference an id; its references live in
+ * Blueprints, where this layer has no business guessing.
+ */
+export function referencesAt(index: WorkspaceIndex, file: string, offset: number): ReferenceAnswer | undefined {
+    const summary = index.summaryOf(file);
+    if (!summary) {
+        return undefined;
+    }
+    const covers = (site: SymbolSite): boolean => site.start <= offset && offset <= site.end;
+
+    const classHit = (summary.classPath && covers(summary.classPath) ? summary.classPath : undefined)
+        ?? summary.nestedClasses.find(covers);
+    if (classHit) {
+        const declaring = index.fileForClass(classHit.name);
+        return { declaration: declaring?.classPath, uses: index.nestingSitesOf(classHit.name) };
+    }
+
+    const styleHit = summary.styles.find(covers) ?? summary.styleUses.find(covers);
+    if (styleHit) {
+        const wanted = fold(styleHit.name);
+        return {
+            declaration: summary.styles.find((style) => fold(style.name) === wanted),
+            uses: summary.styleUses.filter((use) => fold(use.name) === wanted),
+        };
+    }
+
+    const resourceHit = summary.resources.find(covers) ?? summary.resourceUses.find(covers);
+    if (resourceHit) {
+        const wanted = fold(resourceHit.name);
+        return {
+            declaration: summary.resources.find((entry) => fold(entry.name) === wanted),
+            uses: summary.resourceUses.filter((use) => fold(use.name) === wanted),
+        };
+    }
+    return undefined;
+}
+
 export class WorkspaceIndex {
     private readonly files = new Map<string, FileSummary>();
 

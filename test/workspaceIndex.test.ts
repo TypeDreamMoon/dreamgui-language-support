@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { WorkspaceIndex, summarizeFile, packagePathOf } from '../src/core/workspaceIndex';
+import { WorkspaceIndex, summarizeFile, packagePathOf, referencesAt } from '../src/core/workspaceIndex';
 
 const PANEL = `class /Game/UI/WBP_Panel
 
@@ -83,6 +83,44 @@ test('findSymbols searches ids, styles and resources, case-insensitively', () =>
     assert.deepEqual(index.findSymbols('label').map((h) => `${h.kind}:${h.name}`), ['style:Label']);
     assert.deepEqual(index.findSymbols('accent').map((h) => `${h.kind}:${h.name}`), ['resource:Accent']);
     assert.equal(index.findSymbols('').length > 5, true); // empty query = everything
+});
+
+test('references: a style answers its declaration and every wearing site, from either end', () => {
+    const index = makeIndex();
+    const file = 'I:/proj/DUI/Panel.dui';
+    const declarationOffset = PANEL.indexOf('Label');           // in 'style Label'
+    const useOffset = PANEL.indexOf(': Label') + 3;             // worn on Title
+    for (const offset of [declarationOffset, useOffset]) {
+        const answer = referencesAt(index, file, offset)!;
+        assert.equal(answer.declaration?.name, 'Label');
+        assert.equal(answer.uses.length, 1);
+        assert.equal(PANEL.slice(answer.uses[0].start, answer.uses[0].end), 'Label');
+    }
+});
+
+test('references: a resource answers from the declaration or any @use', () => {
+    const index = makeIndex();
+    const file = 'I:/proj/DUI/Panel.dui';
+    const answer = referencesAt(index, file, PANEL.indexOf('@Accent') + 2)!;
+    assert.equal(answer.declaration?.name, 'Accent');
+    assert.deepEqual(answer.uses.map((use) => PANEL.slice(use.start, use.end)), ['@Accent']);
+});
+
+test('references: a class path crosses files, from the nested tag or the class line', () => {
+    const index = makeIndex();
+    const fromTag = referencesAt(index, 'I:/proj/DUI/Panel.dui', PANEL.indexOf('/Game/UI/WBP_Card') + 4)!;
+    assert.equal(fromTag.declaration?.file, 'I:/proj/DUI/Card.dui');
+    assert.equal(fromTag.uses.length, 1);
+    assert.equal(fromTag.uses[0].file, 'I:/proj/DUI/Panel.dui');
+
+    const fromClassLine = referencesAt(index, 'I:/proj/DUI/Card.dui', CARD.indexOf('/Game/UI/WBP_Card') + 4)!;
+    assert.equal(fromClassLine.uses.length, 1);
+    assert.equal(fromClassLine.uses[0].file, 'I:/proj/DUI/Panel.dui');
+});
+
+test('references: a node id gets no answer -- its references live in Blueprints', () => {
+    const index = makeIndex();
+    assert.equal(referencesAt(index, 'I:/proj/DUI/Panel.dui', PANEL.indexOf('Title') + 1), undefined);
 });
 
 test('update replaces and remove forgets', () => {
