@@ -68,7 +68,7 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     2005: {
         title: '属性缺少值',
-        explain: '属性名后面要跟 `=` 或 `<-`,并且操作符后面必须有值。',
+        explain: '属性名后面要跟四个操作符之一:`= 值`、`<- 表达式`、`<-> 变量` 或 `-> 处理函数`,并且操作符后面必须有内容。',
         fix: '补上 `= 值` 或 `<- 函数()`。',
     },
     2006: {
@@ -93,8 +93,18 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     2010: {
         title: '循环头的形状不对',
-        explain: '循环写作 `for 变量 in 函数()` 或 `each 变量 in 函数()`;括号是必须的——它提醒右边是一次调用而不是一个变量。',
-        fix: '按 `for Row in GetRows() { ... }` 的形状补全。',
+        explain: '循环写作 `for 变量 in 来源` 或 `each 变量 in 来源`。括号区分来源的两种形状:`in GetItems()` 调用一个无参函数,`in Items` 读一个变量——变量拼写正是让 FieldNotify 数组能驱动列表刷新的那一种。带参数的调用不合法。',
+        fix: '按 `each Row in GetRows() { ... }` 或 `each Row in Rows { ... }` 的形状补全。',
+    },
+    2011: {
+        title: '绑定表达式没有解析通过',
+        explain: '`<-` 右边是一个表达式:函数调用、变量、字面量,或它们的算符组合(`!` `==` `!=` `<` `<=` `>` `>=` `&&` `||` `+` `-` `*` `%`;没有除法)。这一条说的是表达式本身残缺——多余的记号、没闭合的括号、`<->` 右边不是单个变量名。注意 `<` 紧跟 `-` 是绑定箭头:小于负数要写 `a < -1`,空格不能省。',
+        fix: '按消息提示补全表达式;比较负数时在 `<` 和 `-` 之间留空格。',
+    },
+    2012: {
+        title: 'use 导入没有兑现',
+        explain: '`use "路径"` 把另一个文件的样式和资源并进本文件的查找链(本地声明遮蔽导入)。这一条覆盖所有兑现失败:不是带引号的路径、路径在所有 DUI 根下都解析不到、被导入文件自己没解析通过,或导入链成环(菱形不算环)。失败的导入什么都不带进来,只在要求它的那一行说一次。',
+        fix: '核对路径拼写与文件位置;被导入文件报解析失败时,直接编译那个文件看它自己的错误。',
     },
 
     // --- 3xxx 语义 ---
@@ -105,7 +115,7 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     3002: {
         title: '这个 id 不能用',
-        explain: '关键字(class/style/resources/slot/for/each/in/was)不能做 id;以数字开头的名字也不行——SanitizeIdentifier 会给它加前缀下划线,于是 .dui 里写的名字和生成类声明的变量名悄悄分叉,所有绑定都会落空。',
+        explain: '关键字(class/style/resources/slot/for/each/in/was/use)不能做 id;以数字开头的名字也不行——SanitizeIdentifier 会给它加前缀下划线,于是 .dui 里写的名字和生成类声明的变量名悄悄分叉,所有绑定都会落空。',
         fix: '换一个以字母或下划线开头、不是关键字的名字;中文名是合法的。',
     },
     3003: {
@@ -224,7 +234,7 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     5004: {
         title: '绑定的函数不存在或带参数',
-        explain: '`<-` 右边必须是本类声明的无参函数。',
+        explain: '`<- 函数()` 的裸调用形状要求本类声明的无参函数,这个名字找不到或带参数。带参数的调用、算符组合与变量引用走表达式降糖那条路,它们的拒绝是 DUI5011。',
         fix: '在 widget 类上声明这个无参函数,或改成已有的函数名。',
     },
     5005: {
@@ -239,8 +249,8 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     5007: {
         title: '循环体还没有被展开(暂行)',
-        explain: '语法从第一天就接受循环,今天写的文件将来都能编译;但展开尚未实现,这条警告告诉你循环体没有进树。此码会在循环落地时退役。',
-        fix: '暂时手工展开,或等待循环特性落地。',
+        explain: '`each` 已经落地(建列表视图数据源,虚拟化白拿);`for` 的编译期展开尚未实现,这条警告告诉你 for 体没有进树。此码会在 for 落地时退役。',
+        fix: '列表场景改写成 `each`;真正需要编译期重复展开的,暂时手工展开。',
     },
     5008: {
         title: '绑定目标的种类无法被记录',
@@ -256,6 +266,16 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         title: '事件不存在或不可路由',
         explain: '`->` 左边必须是目标对象上 BlueprintAssignable 的动态多播事件,且不能是带点的子路径。',
         fix: '对照补全列表选择真实的事件名。',
+    },
+    5011: {
+        title: '绑定表达式降不成蓝图函数',
+        explain: '表达式语法上没问题(那是 2011),但 thunk 生成器降不动它:某个名字在本类上既不是变量也不是函数、某个算符对操作数类型没有重载、或某个类型不知道怎么转换。`each` 体之外的带点引用也落在这里——图取不到按名字的子属性。消息会点名具体的拒绝。',
+        fix: '按消息修表达式;逻辑复杂时移进一个真函数,绑定那个函数。',
+    },
+    5012: {
+        title: 'each 放错了地方',
+        explain: '`each` 只能出现在一个能装列表的位置:不能嵌套在另一个 each 里、不能做根、宿主(父节点)必须带列表视图类行为、体必须恰好是一个模板 widget。一个码覆盖这些规则,因为读者的动作是同一个——重排这个块;消息会说明踩了哪条。',
+        fix: '把 each 移进带 UIRecyclableScrollView 一族行为的父节点,体收敛成单个模板 widget。',
     },
 
     // --- 6xxx 编译 ---

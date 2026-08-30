@@ -35,13 +35,11 @@ test('DUI1001: every punctuation mark the grammar owns lexes clean', () => {
     assert.deepEqual(codes('{ } ( ) , . : = + @ ; -> <- #FFF "x" /Game/A -3 Name'), []);
 });
 
-test('DUI1001: a lone < is unexpected, but never swallows an adjacent <-', () => {
-    const result = scan('A << B');
-    assert.deepEqual(result.diagnostics.map((d) => d.code), [1001]);
-    const okay = scan('A <<- B');
-    // The run takes the first '<' and stops before the arrow.
-    assert.deepEqual(okay.diagnostics.map((d) => d.code), [1001]);
-    assert.ok(okay.tokens.some((token) => token.kind === 'arrow'));
+test('DUI1001: a lone & or | is unexpected; the doubled forms are operators', () => {
+    assert.deepEqual(scan('A & B').diagnostics.map((d) => d.code), [1001]);
+    assert.deepEqual(scan('A | B').diagnostics.map((d) => d.code), [1001]);
+    assert.deepEqual(codes('A && B'), []);
+    assert.deepEqual(codes('A || B'), []);
 });
 
 // ---- DUI1002 unterminated string ---------------------------------------------------------------
@@ -136,6 +134,54 @@ test('-> lexes as the event arrow, not a malformed negative', () => {
 test('<- lexes as the binding arrow', () => {
     assert.deepEqual(nonSeparator('Text <- GetTitle()').map((token) => token.kind),
         ['identifier', 'arrow', 'identifier', 'openParen', 'closeParen']);
+});
+
+// ---- the expression operators, born when `<-` learned expressions ------------------------------
+
+test('<-> lexes as the two-way arrow, three characters and one token', () => {
+    assert.deepEqual(nonSeparator('Value <-> Volume').map((token) => token.kind),
+        ['identifier', 'twoWayArrow', 'identifier']);
+    const arrow = scan('Value <-> Volume').tokens.find((token) => token.kind === 'twoWayArrow')!;
+    assert.equal(arrow.text, '<->');
+});
+
+test('the comparison and logic operators all lex clean', () => {
+    assert.deepEqual(nonSeparator('a == b != c <= d >= e < f > g').map((token) => token.kind),
+        ['identifier', 'equalEqual', 'identifier', 'bangEqual', 'identifier', 'lessEqual',
+            'identifier', 'greaterEqual', 'identifier', 'less', 'identifier', 'greater', 'identifier']);
+    assert.deepEqual(nonSeparator('!IsBusy() && a || b').map((token) => token.kind),
+        ['bang', 'identifier', 'openParen', 'closeParen', 'ampAmp', 'identifier', 'pipePipe', 'identifier']);
+    assert.deepEqual(nonSeparator('a * b % c + d').map((token) => token.kind),
+        ['identifier', 'star', 'identifier', 'percent', 'identifier', 'plus', 'identifier']);
+});
+
+test('a - after an operand is subtraction; anywhere else it starts a number', () => {
+    // `A - 5` and `Count() - Base()`: the previous token is an operand, so the operator.
+    assert.deepEqual(nonSeparator('A - 5').map((token) => token.kind),
+        ['identifier', 'minus', 'number']);
+    assert.deepEqual(nonSeparator('Count() - Base()').map((token) => token.kind).slice(3, 5),
+        ['minus', 'identifier']);
+    // `X = -5` and `(400, -240)`: the previous token is '=' or ',', so the sign.
+    assert.deepEqual(nonSeparator('X = -5').map((token) => token.kind),
+        ['identifier', 'equals', 'number']);
+    assert.deepEqual(nonSeparator('P = (400, -240)').map((token) => token.kind),
+        ['identifier', 'equals', 'openParen', 'number', 'comma', 'number', 'closeParen']);
+    // A lone minus where a value belongs keeps reporting as the malformed number it always was.
+    assert.deepEqual(codes('A = -'), [1004]);
+});
+
+test('a < against a negative number needs the space: `a < -1` compares, `a <-1` binds', () => {
+    assert.deepEqual(nonSeparator('a < -1').map((token) => token.kind),
+        ['identifier', 'less', 'number']);
+    assert.deepEqual(nonSeparator('a <-1').map((token) => token.kind),
+        ['identifier', 'arrow', 'number']);
+});
+
+test('<< is two less-thans now, and <<- still surfaces the arrow', () => {
+    assert.deepEqual(nonSeparator('A << B').map((token) => token.kind),
+        ['identifier', 'less', 'less', 'identifier']);
+    assert.deepEqual(nonSeparator('A <<- B').map((token) => token.kind),
+        ['identifier', 'less', 'arrow', 'identifier']);
 });
 
 test('a comment can contain an asset path without producing a path token', () => {

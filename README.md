@@ -6,9 +6,12 @@ Language support for DreamGUI `.dui` widget hierarchies.
 
 ## What it does
 
-- **Syntax highlighting** for the whole grammar, plus **semantic highlighting** for identity:
-  node ids render as the member variables they become, styles as classes, resources as readonly
-  constants, `->` events and handlers, loop variables, components.
+- **Syntax highlighting** for the whole grammar — binding expressions (`Enabled <- !IsBusy() &&
+  Count() > 0`), the two-way arrow (`Value <-> Volume`), `use "…"` imports and both loop-source
+  shapes included — plus **semantic highlighting** for identity: node ids render as the member
+  variables they become, styles as classes, resources as readonly constants, `->` events and
+  handlers, loop variables (`Item.Member` in an `each` body colours as the parameter it uses),
+  calls as functions, bare names as variables, components.
 - **Completion** for built-in tags, component classes, per-class properties, enum values, slot
   properties, resource types, `@` resource references and `->` event names.
 - **Colour chips and a picker** on every `#hex` literal -- properties, styles and resources alike.
@@ -30,8 +33,9 @@ Language support for DreamGUI `.dui` widget hierarchies.
 - **A status bar item** showing whether symbols are loaded — a missing `.dui-symbols.json` is a
   visible warning with instructions, not a silent downgrade.
 - **Workspace navigation**: Ctrl+T over every id, style and resource in every .dui; F12 on a
-  nested `/Game/X` tag lands on the file whose class line declares it; find-references for
-  styles, resources and class paths.
+  nested `/Game/X` tag lands on the file whose class line declares it, and F12 on a `use "…"`
+  spelling opens the imported file when exactly one workspace file matches it; find-references
+  for styles, resources and class paths.
 - **Rename (F2) that speaks the language**: styles and resources rename with every use; renaming
   a node id **writes the `(was: OldId)` clause** so the next compile migrates graph references,
   bindings and animations — and renaming back removes it. You are told when localization keys

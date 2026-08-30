@@ -76,6 +76,29 @@
   "Property binding": {
     "prefix": "bind",
     "body": ["${1:Text} <- ${2:GetTitle}()"],
-    "description": "Drive a property from a no-argument function every frame"
+    "description": "Drive a property from a function or variable; operators and arguments are allowed"
+  },
+  "Two-way binding": {
+    "prefix": "bind2",
+    "body": ["${1:Value} <-> ${2:Volume}"],
+    "description": "Mirror a value control's property and a variable both ways; echo-free"
+  },
+  "Each list": {
+    "prefix": "each",
+    "body": [
+      "+ ${1:UIRecyclableScrollView} {}",
+      "",
+      "each ${2:Item} in ${3:Items} {",
+      "    ${4:Text} ${5:Row} {",
+      "        Text <- ${2:Item}.${6:Title}",
+      "    }",
+      "}"
+    ],
+    "description": "A virtualized list: the body is the cell template, Item.Member binds per row"
+  },
+  "Use import": {
+    "prefix": "use",
+    "body": ["use \"${1:Styles/Common.dui}\""],
+    "description": "Pull another file's styles and resources into this one's lookup"
   }
 }

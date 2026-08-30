@@ -61,11 +61,31 @@ export function collectSemanticSpans(structure: StructureResult): SemanticSpan[]
     for (const ref of structure.resourceRefs) {
         push(ref.start + 1, ref.name.length, 'variable', ['readonly']);
     }
+    const loopScopes = structure.scopes.filter((scope) => scope.kind === 'loop');
     for (const binding of structure.bindings) {
         if (binding.isEvent) {
             push(binding.pathStart, binding.pathEnd - binding.pathStart, 'event');
         }
-        push(binding.nameStart, binding.name.length, 'function');
+        if (!binding.isVariable) {
+            push(binding.nameStart, binding.name.length, 'function');
+            continue;
+        }
+        // A variable ref: a `<->` right side, or a bare identifier in a binding expression. When
+        // its first segment IS an enclosing loop's variable (`Item.Title` inside `each Item in`),
+        // that segment is the parameter it declares -- same colour as the declaration, case
+        // sensitive like the compiler's loop-variable rules.
+        const dot = binding.name.indexOf('.');
+        const head = dot < 0 ? binding.name : binding.name.slice(0, dot);
+        const insideOwningLoop = loopScopes.some((scope) => scope.id === head
+            && binding.nameStart >= scope.bodyStart && binding.nameStart <= scope.bodyEnd);
+        if (insideOwningLoop) {
+            push(binding.nameStart, head.length, 'parameter');
+            if (dot >= 0) {
+                push(binding.nameStart + dot + 1, binding.name.length - dot - 1, 'variable');
+            }
+        } else {
+            push(binding.nameStart, binding.name.length, 'variable');
+        }
     }
 
     spans.sort((a, b) => a.start - b.start);

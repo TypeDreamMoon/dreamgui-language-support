@@ -5,6 +5,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#class-line" },
+    { "include": "#use-directive" },
     { "include": "#resources-block" },
     { "include": "#style-declaration" },
     { "include": "#slot-declaration" },
@@ -12,6 +13,7 @@
     { "include": "#component-line" },
     { "include": "#slot-property" },
     { "include": "#key-override" },
+    { "include": "#two-way-binding" },
     { "include": "#event-route" },
     { "include": "#binding" },
     { "include": "#property-assignment" },
@@ -30,6 +32,13 @@
       "captures": {
         "1": { "name": "keyword.control.class.dui" },
         "2": { "name": "entity.name.namespace.dui" }
+      }
+    },
+    "use-directive": {
+      "match": "^\\s*(use)\\s+(\"[^\"]*\")",
+      "captures": {
+        "1": { "name": "keyword.control.use.dui" },
+        "2": { "name": "string.quoted.double.import.dui" }
       }
     },
     "resources-block": {
@@ -70,11 +79,14 @@
       }
     },
     "loop-header": {
-      "match": "^\\s*(for|each)\\s+([\\w\\u00A0-\\uFFFF]+)\\s+(in)\\b",
+      "match": "^\\s*(for|each)\\s+([\\w\\u00A0-\\uFFFF]+)\\s+(in)\\b(?:\\s+(?:([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\(\\s*\\))|([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)))?",
       "captures": {
         "1": { "name": "keyword.control.loop.dui" },
         "2": { "name": "variable.parameter.loop.dui" },
-        "3": { "name": "keyword.control.loop.dui" }
+        "3": { "name": "keyword.control.loop.dui" },
+        "4": { "name": "entity.name.function.binding.dui" },
+        "5": { "name": "punctuation.section.parens.dui" },
+        "6": { "name": "variable.other.dui" }
       }
     },
     "component-line": {
@@ -105,6 +117,14 @@
         "2": { "name": "punctuation.section.parens.begin.dui" }
       }
     },
+    "two-way-binding": {
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)?",
+      "captures": {
+        "1": { "name": "variable.other.property.dui" },
+        "2": { "name": "keyword.operator.binding.two-way.dui" },
+        "3": { "name": "variable.other.dui" }
+      }
+    },
     "event-route": {
       "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
       "captures": {
@@ -114,13 +134,32 @@
       }
     },
     "binding": {
-      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<-)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\(\\))?",
-      "captures": {
+      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<-)(?!>)",
+      "beginCaptures": {
         "1": { "name": "variable.other.property.dui" },
-        "2": { "name": "keyword.operator.binding.dui" },
-        "3": { "name": "entity.name.function.binding.dui" },
-        "4": { "name": "punctuation.section.parens.dui" }
-      }
+        "2": { "name": "keyword.operator.binding.dui" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#expression" }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        { "name": "string.quoted.double.dui", "begin": "\"", "end": "\"", "patterns": [ { "name": "constant.character.escape.dui", "match": "\\\\." } ] },
+        { "name": "constant.numeric.dui", "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" },
+        { "name": "constant.language.boolean.dui", "match": "\\b(true|false)\\b" },
+        {
+          "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.binding.dui" },
+            "2": { "name": "punctuation.section.parens.begin.dui" }
+          }
+        },
+        { "name": "keyword.operator.expression.dui", "match": "\\|\\||&&|==|!=|<=|>=|<|>|!|\\+|-|\\*|%" },
+        { "name": "variable.other.dui", "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*" }
+      ]
     },
     "property-assignment": {
       "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)",

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0 — 2026-08-30
+
+The language grew; the extension keeps up. Lexer and mirror track the compiler's 2026-08-30
+grammar (gap-closure batch), commit-for-commit.
+
+- **Binding expressions**: `<-` takes operators (`! == != < <= > >= && || + - * %`), calls with
+  arguments, bare variables and dotted `Item.Member` — all highlighted, every call coloured as a
+  function and every bare name as a variable. Inside an `each` body, `Item.Member`'s first
+  segment colours as the loop parameter it uses. A `-` after an operand is subtraction now;
+  `a < -1` compares (the space matters — `a <-1` is still an arrow, exactly as the compiler
+  reads it).
+- **Two-way `<->`**: its own token, operator scope and property form; the right side colours as
+  the variable it is. After `Value <-> ` the bridge stays silent instead of offering functions —
+  the right side is a variable, and a wrong list is worse than none.
+- **`use "path"` imports**: keyword + path highlighting, recorded by the structure layer
+  (`imports`), and F12 on the spelling opens the imported file when exactly one workspace file
+  matches it, segment-aligned. `use` is a reserved word now (DUI3002 knows).
+- **Loop sources both ways**: `each Row in GetRows()` calls, `each Item in Rows` reads a
+  FieldNotify-able variable — header highlighting distinguishes them.
+- **Code table**: DUI2011/2012/5011/5012 explained in Chinese; 2005/2010/3002/5004/5007
+  refreshed to the new grammar (each landed; for still pending).
+- Snippets: `bind2`, `each`, `use`; `bind`'s "every frame" description retired — bindings are
+  event-driven now.
+
 ## 0.4.0 — 2026-08-30
 
 The bridge release: the Unreal editor becomes this language's preview surface.

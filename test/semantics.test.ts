@@ -71,3 +71,60 @@ test('bindings carry their sides for other consumers too', () => {
     const event = structure.bindings.find((b) => b.isEvent)!;
     assert.equal(SAMPLE.slice(event.pathStart, event.pathEnd), 'OnClicked');
 });
+
+// ---- expressions, <-> and each: the identity of every name on an arrow's right ------------------
+
+const EXPRESSION_SAMPLE = `Widget Root {
+    + UIRecyclableScrollView {}
+
+    Slider Vol {
+        Value <-> Volume
+        Enabled <- !IsBusy() && Count() > Base
+    }
+
+    each Item in Rows {
+        Text Cell {
+            Text <- Item.Title
+        }
+    }
+}
+`;
+
+test('expression names colour by what they are: calls functions, bare names variables', () => {
+    const structure = buildStructure(EXPRESSION_SAMPLE);
+    assert.deepEqual(structure.diagnostics, []);
+    const spans = collectSemanticSpans(structure).map((span) => ({
+        text: EXPRESSION_SAMPLE.slice(span.start, span.start + span.length),
+        type: span.type,
+    }));
+
+    assert.deepEqual(spans.filter((span) => span.text === 'Volume'), [{ text: 'Volume', type: 'variable' }]);
+    assert.deepEqual(spans.filter((span) => span.text === 'IsBusy'), [{ text: 'IsBusy', type: 'function' }]);
+    assert.deepEqual(spans.filter((span) => span.text === 'Count'), [{ text: 'Count', type: 'function' }]);
+    assert.deepEqual(spans.filter((span) => span.text === 'Base'), [{ text: 'Base', type: 'variable' }]);
+});
+
+test('Item.Title splits: the loop variable is the parameter it declares, the member a variable', () => {
+    const structure = buildStructure(EXPRESSION_SAMPLE);
+    const spans = collectSemanticSpans(structure).map((span) => ({
+        text: EXPRESSION_SAMPLE.slice(span.start, span.start + span.length),
+        type: span.type,
+        modifiers: span.modifiers.join(','),
+    }));
+
+    // The declaration in the loop header, then the use inside the binding expression.
+    assert.deepEqual(spans.filter((span) => span.text === 'Item'), [
+        { text: 'Item', type: 'parameter', modifiers: 'declaration' },
+        { text: 'Item', type: 'parameter', modifiers: '' },
+    ]);
+    assert.deepEqual(spans.filter((span) => span.text === 'Title'),
+        [{ text: 'Title', type: 'variable', modifiers: '' }]);
+});
+
+test('the same name outside its loop stays a plain variable', () => {
+    const outside = 'Widget Root {\n    Text T {\n        Text <- Item.Title\n    }\n}\n';
+    const spans = collectSemanticSpans(buildStructure(outside));
+    const item = spans.find((span) => outside.slice(span.start, span.start + span.length) === 'Item.Title');
+    assert.ok(item, 'the dotted ref outside a loop is one span');
+    assert.equal(item!.type, 'variable');
+});

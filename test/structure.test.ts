@@ -266,6 +266,66 @@ test('@slot and @key are not resource references', () => {
     assert.deepEqual(built.resourceRefs, []);
 });
 
+// ---- the day `<-` learned expressions ----------------------------------------------------------
+
+test('<-> parses as a property and records the mirrored variable', () => {
+    const built = buildStructure('Widget Root {\n    Slider Vol {\n        Value <-> Volume\n    }\n}\n');
+    assert.deepEqual(built.diagnostics, []);
+    const slider = built.roots[0].children[0];
+    assert.equal(slider.children.length, 0); // a property, never mistaken for a child node
+    assert.deepEqual(slider.properties.map((p) => `${p.path}:${p.op}`), ['Value:twoWayArrow']);
+    assert.deepEqual(built.bindings.map((b) => `${b.name}:${b.isVariable ? 'variable' : 'function'}`),
+        ['Volume:variable']);
+});
+
+test('a binding expression yields every call as a function ref and every bare name as a variable', () => {
+    const built = buildStructure(
+        'Widget Root {\n    Text T {\n        Text <- Prefix\n        Enabled <- !IsBusy() && Count() > 0\n        RenderOpacity <- GetScale() * 0.5 - Base\n    }\n}\n');
+    assert.deepEqual(built.diagnostics, []);
+    assert.deepEqual(built.bindings.map((b) => `${b.name}:${b.isVariable ? 'variable' : 'function'}`),
+        ['Prefix:variable', 'IsBusy:function', 'Count:function', 'GetScale:function', 'Base:variable']);
+});
+
+test('true and false are literals, not variable refs', () => {
+    const built = buildStructure('Widget Root {\n    Text T {\n        Visible <- true\n    }\n}\n');
+    assert.deepEqual(built.diagnostics, []);
+    assert.deepEqual(built.bindings, []);
+});
+
+test('a call nested in an argument list is still found', () => {
+    const built = buildStructure('Widget Root {\n    Text T {\n        Text <- Format(GetCount(), Suffix)\n    }\n}\n');
+    assert.deepEqual(built.bindings.map((b) => `${b.name}:${b.isVariable ? 'variable' : 'function'}`),
+        ['Format:function', 'GetCount:function', 'Suffix:variable']);
+});
+
+test('Item.Member inside an each body is one dotted variable ref', () => {
+    const built = buildStructure(
+        'Widget Root {\n    + UIRecyclableScrollView {}\n    each Item in Rows {\n        Text Cell {\n            Text <- Item.Title\n        }\n    }\n}\n');
+    assert.deepEqual(built.diagnostics, []);
+    assert.deepEqual(built.bindings.map((b) => `${b.name}:${b.isVariable ? 'variable' : 'function'}`),
+        ['Item.Title:variable']);
+});
+
+test('a loop source is a call with parens or a variable without, both clean', () => {
+    assert.deepEqual(codes('Widget Root {\n    each Row in GetRows() {\n        Text A {}\n    }\n}\n'), []);
+    assert.deepEqual(codes('Widget Root {\n    each Row in Rows {\n        Text A {}\n    }\n}\n'), []);
+});
+
+test('use records the import and judges nothing', () => {
+    const built = buildStructure('class /Game/UI/WBP_X\nuse "Styles/Common.dui"\nWidget Root {}\n');
+    assert.deepEqual(built.diagnostics, []);
+    assert.deepEqual(built.imports.map((entry) => entry.path), ['Styles/Common.dui']);
+    assert.equal(built.imports[0].line, 2);
+    // A malformed one (no quoted path) is the compiler's refusal to word; stepped over here.
+    const malformed = buildStructure('use Common\nWidget Root {}\n');
+    assert.deepEqual(malformed.diagnostics, []);
+    assert.deepEqual(malformed.imports, []);
+});
+
+test('DUI3002: use is a keyword now, and cannot be a node id', () => {
+    assert.deepEqual(codes('Widget use {}\n'), [3002]);
+});
+
 // ---- fixture sweep -----------------------------------------------------------------------------
 
 test('the real SettingsPanel.dui produces zero structural diagnostics', () => {

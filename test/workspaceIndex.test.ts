@@ -123,6 +123,26 @@ test('references: a node id gets no answer -- its references live in Blueprints'
     assert.equal(referencesAt(index, 'I:/proj/DUI/Panel.dui', PANEL.indexOf('Title') + 1), undefined);
 });
 
+test('a use spelling resolves by suffix, segment-aligned, unique or nothing', () => {
+    const index = makeIndex();
+    index.update('I:/proj/DUI/Styles/Common.dui', 'style Base { FontSize = 12 }\n');
+    index.update('I:/other/DUI/Styles/Common.dui', 'style Base { FontSize = 14 }\n');
+
+    // Segment-aligned: 'Common.dui' must not match a file merely ENDING in those letters.
+    index.update('I:/proj/DUI/UnCommon.dui', 'Widget Root {}\n');
+    assert.deepEqual(index.resolveImportSpelling('ard.dui'), []);
+
+    // Two candidates: both reported -- the caller treats anything but one as no answer.
+    assert.equal(index.resolveImportSpelling('Styles/Common.dui').length, 2);
+    assert.equal(index.resolveImportSpelling('Common.dui').length, 2);
+
+    // One candidate, back slashes and case forgiven.
+    assert.deepEqual(index.resolveImportSpelling('proj\\DUI\\styles\\common.dui'),
+        ['I:/proj/DUI/Styles/Common.dui']);
+    assert.deepEqual(index.resolveImportSpelling('Panel.dui'), ['I:/proj/DUI/Panel.dui']);
+    assert.deepEqual(index.resolveImportSpelling(''), []);
+});
+
 test('update replaces and remove forgets', () => {
     const index = makeIndex();
     index.update('I:/proj/DUI/Card.dui', 'class /Game/UI/WBP_Renamed\nWidget Root {}\n');

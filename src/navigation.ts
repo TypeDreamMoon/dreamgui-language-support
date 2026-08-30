@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { WorkspaceIndexHost } from './workspace';
 import { SymbolSite, referencesAt } from './core/workspaceIndex';
+import { buildModel } from './docmodel';
 
 function siteLocation(site: SymbolSite): vscode.Location {
     return new vscode.Location(vscode.Uri.file(site.file),
@@ -23,6 +24,34 @@ export function registerNavigation(context: vscode.ExtensionContext, host: Works
                         : vscode.SymbolKind.Field;
             return host.index.findSymbols(query).map((hit) => new vscode.SymbolInformation(
                 hit.name, kindOf(hit.kind), hit.detail, siteLocation(hit.site)));
+        },
+    }));
+
+    // ---- definition through a use: the quoted spelling -> the file it resolves to --------------
+    // Resolution proper is the compiler's (it walks the DUI roots); this mirror answers only when
+    // exactly one indexed file's path ends with the spelling. A wrong jump is worse than none.
+    context.subscriptions.push(vscode.languages.registerDefinitionProvider({ language: 'dui' }, {
+        async provideDefinition(document, position) {
+            const offset = document.offsetAt(position);
+            const imported = buildModel(document).structure.imports.find(
+                (entry) => offset >= entry.pathStart && offset <= entry.pathEnd);
+            if (!imported) {
+                return undefined;
+            }
+            await host.ensureScanned();
+            const matches = host.index.resolveImportSpelling(imported.path);
+            if (matches.length !== 1) {
+                return undefined;
+            }
+            const top = new vscode.Range(0, 0, 0, 0);
+            const link: vscode.LocationLink = {
+                originSelectionRange: new vscode.Range(
+                    document.positionAt(imported.pathStart), document.positionAt(imported.pathEnd)),
+                targetUri: vscode.Uri.file(matches[0]),
+                targetRange: top,
+                targetSelectionRange: top,
+            };
+            return [link];
         },
     }));
 

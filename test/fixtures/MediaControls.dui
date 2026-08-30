@@ -1,0 +1,54 @@
+// The new-syntax exercise: expressions, <->, each over a variable, use.
+class /Game/UI/WBP_MediaControls
+
+use "Styles/Common.dui"
+
+style Heading {
+    FontSize = 22
+}
+
+resources {
+    Color Accent = #FF6600
+}
+
+Widget Root {
+    AnchorData.AnchorMin = (0, 0)
+    AnchorData.AnchorMax = (1, 1)
+
+    + VerticalBox {}
+
+    Text Title : Heading {
+        Text <- Prefix
+        Brush.TintColor = @Accent
+    }
+
+    Slider Volume {
+        Value <-> MasterVolume
+        Enabled <- !IsMuted() && GetTrackCount() > 0
+    }
+
+    Text Summary {
+        Text <- FormatSummary(GetTrackCount(), Suffix)
+        RenderOpacity <- GetFade() * 0.5 - BaseFade
+    }
+
+    Widget TrackList {
+        + UIRecyclableScrollView {}
+
+        each Track in Tracks {
+            Text Row {
+                Text <- Track.Title
+            }
+        }
+    }
+
+    Widget HistoryList {
+        + UIRecyclableScrollView {}
+
+        each Entry in GetHistory() {
+            Text HistoryRow {
+                Text <- Entry.Label
+            }
+        }
+    }
+}

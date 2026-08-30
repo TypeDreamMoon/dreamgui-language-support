@@ -106,7 +106,7 @@ export interface PropertyStmt {
     /** Whole statement: first path token to the end of the value. */
     start: number;
     end: number;
-    op: 'equals' | 'arrow' | 'eventArrow';
+    op: 'equals' | 'arrow' | 'eventArrow' | 'twoWayArrow';
     /** True when the statement was led by '@slot'. */
     isSlot: boolean;
     /** Value span (op 'equals' only). */
@@ -114,16 +114,37 @@ export interface PropertyStmt {
     valueEnd?: number;
 }
 
-/** One `Prop <- Func()` binding or `Event -> Handler` route. */
+/**
+ * One name the right side of an arrow refers to. `Event -> Handler` contributes the handler;
+ * `Prop <- Expr` contributes every call and every variable the expression mentions (there can be
+ * several now that `<-` takes expressions); `Prop <-> Var` contributes the mirrored variable.
+ */
 export interface BindingRef {
     /** True for `->`: the left side is an event, the right side a handler someone else calls. */
     isEvent: boolean;
     /** The left-hand path, as offsets. */
     pathStart: number;
     pathEnd: number;
-    /** The function / handler name on the right. */
+    /** The function / handler / variable name on the right. Dotted for `Item.Member` in a loop. */
     name: string;
     nameStart: number;
+    /**
+     * True when the name refers to a VARIABLE on the class rather than a function: a `<->` right
+     * side, or a bare identifier in a binding expression (parens are what make a call).
+     */
+    isVariable?: boolean;
+}
+
+/** One `use "path"` directive. The path is as written; resolution belongs to the compiler. */
+export interface UseDirective {
+    path: string;
+    line: number;
+    column: number;
+    /** Offset of the 'use' keyword. */
+    start: number;
+    /** The quoted string, quotes included -- what a document link underlines. */
+    pathStart: number;
+    pathEnd: number;
 }
 
 /** A block something can stand inside, for answering "what scope is this offset in". */
@@ -145,6 +166,7 @@ export interface StructureResult {
     resources: ResourceDecl[];
     resourceRefs: ResourceRef[];
     bindings: BindingRef[];
+    imports: UseDirective[];
     scopes: Scope[];
     diagnostics: DuiDiagnostic[];
 }
@@ -156,7 +178,7 @@ class Parser {
     private readonly loopVariables: string[] = [];
 
     readonly result: StructureResult = {
-        roots: [], styles: [], resources: [], resourceRefs: [], bindings: [], scopes: [], diagnostics: [],
+        roots: [], styles: [], resources: [], resourceRefs: [], bindings: [], imports: [], scopes: [], diagnostics: [],
     };
 
     constructor(private readonly tokens: Token[]) {}
@@ -235,6 +257,8 @@ class Parser {
             const before = this.index;
             if (this.checkKeyword('class')) {
                 this.parseClassDeclaration();
+            } else if (this.checkKeyword('use')) {
+                this.parseUseDirective();
             } else if (this.checkKeyword('style') && this.peek(1).kind === 'identifier') {
                 this.parseStyleDeclaration();
             } else if (this.checkKeyword('resources')) {
@@ -292,6 +316,28 @@ class Parser {
                 path: token.text, line: token.line, column: token.column, start: token.start, end: token.end,
             };
         }
+        this.advance();
+    }
+
+    /**
+     * `use "Styles/Common.dui"` -- recorded for navigation, never judged: whether the path
+     * resolves, whether the file parses, whether the chain cycles all need OTHER files, and the
+     * verdicts (DUI2012) are the compiler's to word. A malformed one (no quoted path) is likewise
+     * the compiler's refusal; this layer steps over it.
+     */
+    private parseUseDirective(): void {
+        const keyword = this.current();
+        this.advance(); // 'use'
+        if (!this.check('string')) {
+            this.skipToStatementBoundary();
+            return;
+        }
+        const pathToken = this.current();
+        this.result.imports.push({
+            path: pathToken.text,
+            line: keyword.line, column: keyword.column, start: keyword.start,
+            pathStart: pathToken.start, pathEnd: pathToken.end,
+        });
         this.advance();
     }
 
@@ -578,7 +624,8 @@ class Parser {
             return false;
         }
         const next = this.peek(1).kind;
-        return next === 'dot' || next === 'equals' || next === 'arrow' || next === 'eventArrow';
+        return next === 'dot' || next === 'equals' || next === 'arrow' || next === 'eventArrow'
+            || next === 'twoWayArrow';
     }
 
     private parseProperty(isSlot = false): PropertyStmt | undefined {
@@ -593,21 +640,52 @@ class Parser {
             pathEnd = this.current().end;
             this.advance();
         }
-        if (this.check('arrow') || this.check('eventArrow')) {
-            const isEvent = this.check('eventArrow');
+        if (this.check('eventArrow')) {
+            // `OnClicked -> Confirm` -- a bare handler name, exactly one.
             this.advance();
             if (this.check('identifier')) {
                 const fn = this.current();
                 this.result.bindings.push({
-                    isEvent, pathStart: first.start, pathEnd, name: fn.text, nameStart: fn.start,
+                    isEvent: true, pathStart: first.start, pathEnd, name: fn.text, nameStart: fn.start,
                 });
                 this.advance();
             }
-            this.parseValueUntilBoundary(); // the '()' a binding carries
+            this.parseValueUntilBoundary();
             return {
                 path, pathStart: first.start, start: first.start,
                 end: this.tokens[Math.max(0, this.index - 1)].end,
-                op: isEvent ? 'eventArrow' : 'arrow', isSlot,
+                op: 'eventArrow', isSlot,
+            };
+        }
+        if (this.check('twoWayArrow')) {
+            // `Value <-> Volume` -- a bare VARIABLE name: the two sides mirror each other, and a
+            // call or an expression has no left-hand side to write back into.
+            this.advance();
+            if (this.check('identifier')) {
+                const variable = this.current();
+                this.result.bindings.push({
+                    isEvent: false, pathStart: first.start, pathEnd,
+                    name: variable.text, nameStart: variable.start, isVariable: true,
+                });
+                this.advance();
+            }
+            this.parseValueUntilBoundary();
+            return {
+                path, pathStart: first.start, start: first.start,
+                end: this.tokens[Math.max(0, this.index - 1)].end,
+                op: 'twoWayArrow', isSlot,
+            };
+        }
+        if (this.check('arrow')) {
+            // `Prop <- Expr` -- the right side is an expression now. Whether it type-checks is the
+            // thunk generator's verdict (DUI2011/5011); what THIS layer owes downstream is every
+            // name the expression mentions: calls as functions, bare identifiers as variables.
+            this.advance();
+            this.scanBindingExpression(first.start, pathEnd);
+            return {
+                path, pathStart: first.start, start: first.start,
+                end: this.tokens[Math.max(0, this.index - 1)].end,
+                op: 'arrow', isSlot,
             };
         }
         if (this.check('equals')) {
@@ -622,6 +700,44 @@ class Parser {
         }
         this.skipToStatementBoundary();
         return undefined;
+    }
+
+    /**
+     * Walks a binding expression to the statement boundary, collecting references and judging
+     * nothing: `Count() - Base()` yields two function refs, `Prefix` a variable ref, `Item.Title`
+     * one dotted variable ref (how a binding says something about an `each` item). Parens are what
+     * make a call, exactly as in the compiler's grammar, and nested calls inside argument lists
+     * are found because this walk does not skip tuples. Operators, literals and mistakes alike are
+     * stepped over -- DUI2011 is the compiler's to word.
+     */
+    private scanBindingExpression(pathStart: number, pathEnd: number): void {
+        while (!this.atEnd() && !this.check('separator') && !this.check('closeBrace')) {
+            if (!this.check('identifier')) {
+                this.advance();
+                continue;
+            }
+            const name = this.current();
+            if (name.text === 'true' || name.text === 'false') {
+                this.advance();
+                continue;
+            }
+            this.advance();
+            if (this.check('openParen')) {
+                this.result.bindings.push({
+                    isEvent: false, pathStart, pathEnd, name: name.text, nameStart: name.start,
+                });
+                continue; // the '(' and its arguments keep walking through this same loop
+            }
+            let full = name.text;
+            while (this.check('dot') && this.peek(1).kind === 'identifier') {
+                this.advance();
+                full += '.' + this.current().text;
+                this.advance();
+            }
+            this.result.bindings.push({
+                isEvent: false, pathStart, pathEnd, name: full, nameStart: name.start, isVariable: true,
+            });
+        }
     }
 
     /** Consumes a value up to the statement boundary, pairing tuples and reporting DUI2003. */

@@ -231,6 +231,27 @@ export class WorkspaceIndex {
         return out;
     }
 
+    /**
+     * The files whose paths end with an authored `use` spelling, path-segment aligned. The
+     * compiler resolves against DUI roots this index cannot know, but a suffix landing on a
+     * segment boundary agrees with it whenever the workspace holds the tree the roots point
+     * into -- and a caller acting only on a UNIQUE match keeps a wrong jump impossible.
+     */
+    resolveImportSpelling(spelling: string): string[] {
+        const wanted = spelling.replace(/\\/g, '/').toLowerCase();
+        if (wanted.length === 0) {
+            return [];
+        }
+        const out: string[] = [];
+        for (const summary of this.files.values()) {
+            const file = summary.file.replace(/\\/g, '/').toLowerCase();
+            if (file === wanted || file.endsWith('/' + wanted)) {
+                out.push(summary.file);
+            }
+        }
+        return out;
+    }
+
     /** Fuzzy-lite: every symbol whose name contains the query, case-insensitively. */
     findSymbols(query: string): WorkspaceSymbolHit[] {
         const needle = fold(query);

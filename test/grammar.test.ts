@@ -163,6 +163,40 @@ test('a loop header: keyword, variable, in', async () => {
     assertScope(lines, 0, 'Row', 'variable.parameter.loop.dui');
 });
 
+test('a loop source: parens make it a call, their absence a variable', async () => {
+    const lines = await tokenize(['    each Row in GetRows() {', '    each Item in Rows {']);
+    assertScope(lines, 0, 'GetRows', 'entity.name.function.binding.dui');
+    assertScope(lines, 1, 'Rows', 'variable.other.dui');
+});
+
+test('the use directive: keyword and quoted path', async () => {
+    const lines = await tokenize(['use "Styles/Common.dui"']);
+    assertScope(lines, 0, 'use', 'keyword.control.use.dui');
+    assertScope(lines, 0, '"Styles/Common.dui"', 'string.quoted.double.import.dui');
+});
+
+test('a two-way binding: the arrow is its own operator and the right side a variable', async () => {
+    const lines = await tokenize(['        Value <-> Volume']);
+    assertScope(lines, 0, '<->', 'keyword.operator.binding.two-way.dui');
+    assertScope(lines, 0, 'Volume', 'variable.other.dui');
+});
+
+test('a binding expression: calls, operators, bare variables, dotted item refs', async () => {
+    const lines = await tokenize([
+        '        Enabled <- !IsBusy() && Count() > 0',
+        '        Text <- Item.Title',
+        '        RenderOpacity <- GetScale() * 0.5 - Base',
+    ]);
+    assertScope(lines, 0, '<-', 'keyword.operator.binding.dui');
+    assertScope(lines, 0, '!', 'keyword.operator.expression.dui');
+    assertScope(lines, 0, 'IsBusy', 'entity.name.function.binding.dui');
+    assertScope(lines, 0, '&&', 'keyword.operator.expression.dui');
+    assertScope(lines, 0, '>', 'keyword.operator.expression.dui');
+    assertScope(lines, 1, 'Item', 'variable.other.dui');
+    assertScope(lines, 2, '*', 'keyword.operator.expression.dui');
+    assertScope(lines, 2, 'Base', 'variable.other.dui');
+});
+
 test('every line of the real fixture gets at least the source scope', async () => {
     const fixture = fs.readFileSync(path.join(root, 'test', 'fixtures', 'SettingsPanel.dui'), 'utf8');
     const lines = await tokenize(fixture.split(/\r?\n/));

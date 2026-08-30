@@ -34,8 +34,24 @@ export type TokenKind =
     | 'eventArrow'
     /** `<-`, the binding arrow. */
     | 'arrow'
+    /** `<->` -- the two-way binding arrow, three characters. */
+    | 'twoWayArrow'
     | 'plus'
-    | 'at';
+    | 'at'
+    // The expression operators, born when `<-` learned expressions. A '-' is only ever 'minus'
+    // after an operand -- see the run() dispatch; anywhere else it starts a number.
+    | 'minus'
+    | 'star'
+    | 'percent'
+    | 'bang'
+    | 'less'
+    | 'lessEqual'
+    | 'greater'
+    | 'greaterEqual'
+    | 'equalEqual'
+    | 'bangEqual'
+    | 'ampAmp'
+    | 'pipePipe';
 
 export interface Token {
     kind: TokenKind;
@@ -128,7 +144,7 @@ function isInlineWhitespace(code: number): boolean {
 
 /** Keywords, and therefore the words a node id may not be. Case sensitive, as the compiler is. */
 export const RESERVED_WORDS: ReadonlySet<string> =
-    new Set(['class', 'style', 'resources', 'slot', 'for', 'each', 'in', 'was']);
+    new Set(['class', 'style', 'resources', 'slot', 'for', 'each', 'in', 'was', 'use']);
 
 /** Clamped so a .dui path accidentally aimed at a .png reports a readable snippet, not the file. */
 function ellipsize(text: string, maxLength = 16): string {
@@ -191,7 +207,23 @@ class Lexer {
                 this.emitPunctuation('eventArrow', 2);
                 continue;
             }
-            if (isDigit(code) || code === 0x2d) {
+            if (code === 0x2d) {
+                // A '-' after an OPERAND is subtraction; anywhere else it is a number's sign --
+                // including a malformed one, so a lone minus where a value belongs keeps
+                // reporting as the malformed number it always was. `(400, -240)` and `X = -5`
+                // lex exactly as before (previous token is a comma or an equals), while
+                // `A - 5` and `Count() - Base()` become the operator.
+                const previous = this.tokens.length > 0 ? this.tokens[this.tokens.length - 1].kind : undefined;
+                const previousIsOperand = previous === 'identifier' || previous === 'number'
+                    || previous === 'string' || previous === 'hexColor' || previous === 'closeParen';
+                if (previousIsOperand) {
+                    this.emitPunctuation('minus', 1);
+                } else {
+                    this.lexNumber();
+                }
+                continue;
+            }
+            if (isDigit(code)) {
                 this.lexNumber();
                 continue;
             }
@@ -203,8 +235,40 @@ class Lexer {
                 this.lexHexColor();
                 continue;
             }
-            if (code === 0x3c /* < */ && this.peekCode(1) === 0x2d) {
-                this.emitPunctuation('arrow', 2);
+            if (code === 0x3c /* < */) {
+                // '<' immediately followed by '-' is the binding arrow, which means a less-than
+                // against a negative number needs the space: `a < -1`. Written `a <-1` it reads
+                // as an arrow to this lexer exactly as it does to a squinting human. Three
+                // characters make the two-way arrow.
+                if (this.peekCode(1) === 0x2d && this.peekCode(2) === 0x3e /* > */) {
+                    this.emitPunctuation('twoWayArrow', 3);
+                } else if (this.peekCode(1) === 0x2d) {
+                    this.emitPunctuation('arrow', 2);
+                } else if (this.peekCode(1) === 0x3d /* = */) {
+                    this.emitPunctuation('lessEqual', 2);
+                } else {
+                    this.emitPunctuation('less', 1);
+                }
+                continue;
+            }
+            if (code === 0x3e /* > */) {
+                this.emitPunctuation(this.peekCode(1) === 0x3d ? 'greaterEqual' : 'greater', this.peekCode(1) === 0x3d ? 2 : 1);
+                continue;
+            }
+            if (code === 0x21 /* ! */) {
+                this.emitPunctuation(this.peekCode(1) === 0x3d ? 'bangEqual' : 'bang', this.peekCode(1) === 0x3d ? 2 : 1);
+                continue;
+            }
+            if (code === 0x3d /* = */ && this.peekCode(1) === 0x3d) {
+                this.emitPunctuation('equalEqual', 2);
+                continue;
+            }
+            if (code === 0x26 /* & */ && this.peekCode(1) === 0x26) {
+                this.emitPunctuation('ampAmp', 2);
+                continue;
+            }
+            if (code === 0x7c /* | */ && this.peekCode(1) === 0x7c) {
+                this.emitPunctuation('pipePipe', 2);
                 continue;
             }
             if (code === 0x3b /* ; */) {
@@ -579,6 +643,7 @@ const SINGLE_CHAR_KINDS = new Map<number, TokenKind>([
     [0x28, 'openParen'], [0x29, 'closeParen'],
     [0x2c, 'comma'], [0x2e, 'dot'], [0x3a, 'colon'], [0x3d, 'equals'],
     [0x2b, 'plus'], [0x40, 'at'],
+    [0x2a, 'star'], [0x25, 'percent'],
 ]);
 
 /** Lexes the whole file. Never throws: mistakes become diagnostics and tokens of the right shape. */

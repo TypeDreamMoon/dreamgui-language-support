@@ -110,8 +110,11 @@ export function registerBridgeCompletion(context: vscode.ExtensionContext, bridg
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider({ language: 'dui' }, {
         async provideCompletionItems(document, position) {
             const line = document.lineAt(position.line).text.slice(0, position.character);
-            const wantsBinding = /<-\s*[\w\u00A0-\uFFFF]*$/u.test(line);
-            const wantsHandler = !wantsBinding && /->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
+            // `<->` contains both other arrows, so it is judged first: its right side is a
+            // VARIABLE, which the bridge has no list of -- silence beats a wrong function list.
+            const wantsTwoWay = /<->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
+            const wantsBinding = !wantsTwoWay && /<-\s*[\w\u00A0-\uFFFF]*$/u.test(line);
+            const wantsHandler = !wantsTwoWay && !wantsBinding && /->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
             if (!wantsBinding && !wantsHandler) {
                 return undefined;
             }
