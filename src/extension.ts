@@ -12,6 +12,7 @@ import { registerSemanticTokens } from './semanticTokens';
 import { registerEditing } from './editing';
 import { registerNewFile } from './newFile';
 import { registerStatusBar } from './statusBar';
+import { registerQuickfixes } from './quickfix';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -33,6 +34,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerEditing(context);
     registerNewFile(context);
     registerStatusBar(context, store);
+    registerQuickfixes(context);
 }
 
 export function deactivate(): void {}
