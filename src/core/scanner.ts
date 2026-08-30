@@ -69,9 +69,20 @@ export interface LexicalDiagnostic {
     end: number;
 }
 
+/** A comment's whereabouts. The lexer skips comments; folding and future trivia-aware tools need where they were. */
+export interface CommentSpan {
+    kind: 'line' | 'block';
+    start: number;
+    end: number;
+    /** 1-based, like every token. */
+    line: number;
+    endLine: number;
+}
+
 export interface ScanResult {
     tokens: Token[];
     diagnostics: LexicalDiagnostic[];
+    comments: CommentSpan[];
 }
 
 /** "DUI1004". */
@@ -137,6 +148,7 @@ class Lexer {
 
     readonly tokens: Token[] = [];
     readonly diagnostics: LexicalDiagnostic[] = [];
+    readonly comments: CommentSpan[] = [];
 
     constructor(private readonly text: string) {}
 
@@ -274,6 +286,8 @@ class Lexer {
     }
 
     private skipLineComment(): void {
+        const start = this.offset;
+        const line = this.line;
         while (this.offset < this.text.length) {
             const code = this.text.charCodeAt(this.offset);
             if (code === LF || code === CR) {
@@ -281,6 +295,7 @@ class Lexer {
             }
             this.offset++;
         }
+        this.comments.push({ kind: 'line', start, end: this.offset, line, endLine: line });
         // The line break itself is left for the main loop, which turns it into the separator that
         // ends the statement the comment was trailing.
     }
@@ -309,6 +324,7 @@ class Lexer {
         if (!closed) {
             this.addError(1003, "this '/*' never reaches a '*/'", start, this.offset, line, column);
         }
+        this.comments.push({ kind: 'block', start, end: this.offset, line, endLine: this.line });
 
         // A comment that crossed a line still ends the statement it started on. Deleting the line
         // break with the comment would silently join two statements.
@@ -569,5 +585,5 @@ const SINGLE_CHAR_KINDS = new Map<number, TokenKind>([
 export function scan(text: string): ScanResult {
     const lexer = new Lexer(text);
     lexer.run();
-    return { tokens: lexer.tokens, diagnostics: lexer.diagnostics };
+    return { tokens: lexer.tokens, diagnostics: lexer.diagnostics, comments: lexer.comments };
 }

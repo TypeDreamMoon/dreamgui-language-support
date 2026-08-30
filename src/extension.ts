@@ -9,6 +9,7 @@ import { registerFeatures } from './features';
 import { registerDiagnostics } from './diagnostics';
 import { registerColors } from './colors';
 import { registerSemanticTokens } from './semanticTokens';
+import { registerEditing } from './editing';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -27,6 +28,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerDiagnostics(context, store);
     registerColors(context);
     registerSemanticTokens(context);
+    registerEditing(context);
 }
 
 export function deactivate(): void {}

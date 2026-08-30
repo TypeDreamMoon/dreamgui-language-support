@@ -18,7 +18,7 @@
  * No vscode import here: src/core/ is the seam a future LSP server or another IDE reuses.
  */
 
-import { Token, TokenKind, LexicalDiagnostic, scan, RESERVED_WORDS } from './scanner';
+import { Token, TokenKind, LexicalDiagnostic, CommentSpan, scan, RESERVED_WORDS } from './scanner';
 
 export type DuiDiagnostic = LexicalDiagnostic;
 
@@ -912,7 +912,8 @@ export function scopeAt(structure: StructureResult, offset: number): Scope | und
  * carrying both layers' diagnostics (lexical first, as the compiler emits them) and the token
  * stream, for consumers that need token-level facts -- colours, brace balance, semantic tokens.
  */
-export function buildStructure(text: string): StructureResult & { lexical: DuiDiagnostic[]; tokens: Token[] } {
+export function buildStructure(text: string): StructureResult
+    & { lexical: DuiDiagnostic[]; tokens: Token[]; comments: CommentSpan[] } {
     const scanned = scan(text);
     const parser = new Parser(scanned.tokens);
     parser.parseFile();
@@ -923,7 +924,7 @@ export function buildStructure(text: string): StructureResult & { lexical: DuiDi
     }
     collectResourceRefs(scanned.tokens, parser.result);
 
-    return { ...parser.result, lexical: scanned.diagnostics, tokens: scanned.tokens };
+    return { ...parser.result, lexical: scanned.diagnostics, tokens: scanned.tokens, comments: scanned.comments };
 }
 
 /** Every `@Name` in value position: an '@' immediately followed by an identifier that is not a directive. */
