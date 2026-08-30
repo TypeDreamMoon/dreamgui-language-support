@@ -1,0 +1,26 @@
+# The gate a change has to pass: compile, the full node test suite (no VSCode, no engine), and a
+# packaging run -- vsce refuses manifests that would break the marketplace, so packaging IS a test.
+# The .vsix is kept as an artifact so any green commit is installable without a local toolchain.
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test-and-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: '*.vsix'

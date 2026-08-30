@@ -1,5 +1,7 @@
 # DreamUI Language Support
 
+English | [简体中文](README.zh-CN.md)
+
 Language support for DreamGUI `.dui` widget hierarchies.
 
 ## What it does
@@ -42,6 +44,12 @@ Language support for DreamGUI `.dui` widget hierarchies.
   `dui-compiler` — the semantic layer (unknown properties, bad values, missing binding functions)
   beside the grammar-level checks, without this extension growing a second compiler. Hover shows
   UPROPERTY tooltips and pasteable class defaults from the widened symbols dump.
+- **A bridge to the running editor**: `<-` and `->` completion ask the editor what the class
+  really declares; typing `/` offers every nestable widget class (asset registry when the editor
+  is up, the workspace's class lines when it is not); **Reveal in Unreal Designer** opens the
+  designer and selects the node under the cursor; **Compile This File** compiles now, verdicts in
+  Problems. The Unreal designer is this language's preview surface — the bridge just takes you
+  there.
 
 ## Where the smarts come from
 
