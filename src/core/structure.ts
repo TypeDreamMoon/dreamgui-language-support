@@ -92,6 +92,18 @@ export interface ResourceRef {
     start: number;
 }
 
+/** One `Prop <- Func()` binding or `Event -> Handler` route. */
+export interface BindingRef {
+    /** True for `->`: the left side is an event, the right side a handler someone else calls. */
+    isEvent: boolean;
+    /** The left-hand path, as offsets. */
+    pathStart: number;
+    pathEnd: number;
+    /** The function / handler name on the right. */
+    name: string;
+    nameStart: number;
+}
+
 /** A block something can stand inside, for answering "what scope is this offset in". */
 export interface Scope {
     kind: 'node' | 'namedSlot' | 'component' | 'style' | 'resources' | 'loop';
@@ -110,6 +122,7 @@ export interface StructureResult {
     styles: StyleDecl[];
     resources: ResourceDecl[];
     resourceRefs: ResourceRef[];
+    bindings: BindingRef[];
     scopes: Scope[];
     diagnostics: DuiDiagnostic[];
 }
@@ -121,7 +134,7 @@ class Parser {
     private readonly loopVariables: string[] = [];
 
     readonly result: StructureResult = {
-        roots: [], styles: [], resources: [], resourceRefs: [], scopes: [], diagnostics: [],
+        roots: [], styles: [], resources: [], resourceRefs: [], bindings: [], scopes: [], diagnostics: [],
     };
 
     constructor(private readonly tokens: Token[]) {}
@@ -538,12 +551,28 @@ class Parser {
 
     private parseProperty(): void {
         // The dotted path.
+        const first = this.current();
+        let pathEnd = first.end;
         this.advance();
         while (this.check('dot') && this.peek(1).kind === 'identifier') {
             this.advance();
+            pathEnd = this.current().end;
             this.advance();
         }
-        if (this.check('equals') || this.check('arrow') || this.check('eventArrow')) {
+        if (this.check('arrow') || this.check('eventArrow')) {
+            const isEvent = this.check('eventArrow');
+            this.advance();
+            if (this.check('identifier')) {
+                const fn = this.current();
+                this.result.bindings.push({
+                    isEvent, pathStart: first.start, pathEnd, name: fn.text, nameStart: fn.start,
+                });
+                this.advance();
+            }
+            this.parseValueUntilBoundary(); // the '()' a binding carries
+            return;
+        }
+        if (this.check('equals')) {
             this.advance();
             this.parseValueUntilBoundary();
             return;
