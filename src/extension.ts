@@ -21,6 +21,7 @@ import { registerRefactors } from './refactorActions';
 import { registerMailbox } from './mailboxWatcher';
 import { registerBridge } from './bridge';
 import { registerBridgeCompletion } from './bridgeCompletion';
+import { registerBridgeCommands } from './bridgeCommands';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -51,6 +52,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerRefactors(context);
     const bridge = registerBridge(context);
     const bridgeCache = registerBridgeCompletion(context, bridge, workspaceHost);
+    registerBridgeCommands(context, bridge);
     context.subscriptions.push(vscode.commands.registerCommand('dreamui.clearBridgeCache', () => {
         bridgeCache.clear();
         vscode.window.showInformationMessage('DreamUI: bridge caches cleared.');

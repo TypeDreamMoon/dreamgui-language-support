@@ -69,6 +69,20 @@
         "command": "dreamui.newFile",
         "title": "DreamUI: New .dui File",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "dreamui.revealInDesigner",
+        "title": "DreamUI: Reveal in Unreal Designer",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "dreamui.compileFile",
+        "title": "DreamUI: Compile This File",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "dreamui.clearBridgeCache",
+        "title": "DreamUI: Clear Bridge Caches"
       }
     ],
     "menus": {
@@ -77,6 +91,30 @@
           "command": "dreamui.newFile",
           "when": "explorerResourceIsFolder",
           "group": "navigation@30"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dreamui.revealInDesigner",
+          "when": "resourceLangId == dui",
+          "group": "navigation@10"
+        },
+        {
+          "command": "dreamui.compileFile",
+          "when": "resourceLangId == dui",
+          "group": "navigation@11"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "dreamui.revealInDesigner",
+          "when": "resourceLangId == dui",
+          "group": "dreamui@1"
+        },
+        {
+          "command": "dreamui.compileFile",
+          "when": "resourceLangId == dui",
+          "group": "dreamui@2"
         }
       ]
     },
