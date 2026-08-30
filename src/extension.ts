@@ -18,6 +18,7 @@ import { registerWorkspaceIndex } from './workspace';
 import { registerNavigation } from './navigation';
 import { registerRename } from './renameProvider';
 import { registerRefactors } from './refactorActions';
+import { registerMailbox } from './mailboxWatcher';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -38,7 +39,8 @@ export function activate(context: vscode.ExtensionContext): void {
     registerSemanticTokens(context);
     registerEditing(context);
     registerNewFile(context);
-    registerStatusBar(context, store);
+    const mailbox = registerMailbox(context);
+    registerStatusBar(context, store, mailbox);
     registerQuickfixes(context);
     registerExplain(context);
     const workspaceHost = registerWorkspaceIndex(context);

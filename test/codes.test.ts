@@ -6,17 +6,10 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { CODE_EXPLANATIONS, explainCode } from '../src/core/codes';
-
-/** Every code the extension itself can put into the Problems panel. */
-const RAISED_HERE = [
-    1001, 1002, 1003, 1004, 1005,
-    2002, 2003, 2004, 2006,
-    3001, 3002, 3004, 3005, 3008, 3010, 3011, 3012, 3014, 3015,
-    4007,
-];
+import { LOCALLY_RAISED } from '../src/core/mailbox';
 
 test('every code the extension raises has an explanation', () => {
-    for (const code of RAISED_HERE) {
+    for (const code of LOCALLY_RAISED) {
         assert.ok(CODE_EXPLANATIONS[code], `DUI${code} raised but unexplained`);
     }
 });

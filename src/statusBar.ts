@@ -6,8 +6,10 @@
  */
 import * as vscode from 'vscode';
 import { SymbolStore } from './symbols';
+import { MailboxWatcher } from './mailboxWatcher';
 
-export function registerStatusBar(context: vscode.ExtensionContext, store: SymbolStore): void {
+export function registerStatusBar(context: vscode.ExtensionContext, store: SymbolStore,
+    mailbox: MailboxWatcher): void {
     const item = vscode.window.createStatusBarItem('dreamui.symbols', vscode.StatusBarAlignment.Right, 90);
     item.name = 'DreamUI Symbols';
     item.command = 'dreamui.reloadSymbols';
@@ -20,13 +22,17 @@ export function registerStatusBar(context: vscode.ExtensionContext, store: Symbo
             return;
         }
         store.ensureLoadedFor(editor.document.uri.fsPath);
+        const compilerLine = mailbox.isConnected
+            ? `Compiler diagnostics: connected (last delivery ${mailbox.lastLoadedAt?.toLocaleTimeString() ?? '—'}).`
+            : 'Compiler diagnostics: no `.dui-diagnostics.json` seen — semantic checks need the '
+            + 'Unreal editor running; what you see here is the grammar-level truth only.';
         if (store.symbols) {
             const tags = Object.keys(store.symbols.tags ?? {}).length;
             const components = Object.keys(store.symbols.components ?? {}).length;
             item.text = '$(symbol-color) DUI';
             item.tooltip = new vscode.MarkdownString(
                 `**DreamUI symbols loaded** — ${tags} tags, ${components} components\n\n`
-                + `\`${store.sourcePath}\`\n\nClick to reload.`);
+                + `\`${store.sourcePath}\`\n\n${compilerLine}\n\nClick to reload.`);
             item.backgroundColor = undefined;
         } else {
             item.text = '$(warning) DUI';
