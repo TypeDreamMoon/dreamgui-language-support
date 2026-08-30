@@ -133,6 +133,30 @@ test('values: string, escape, number, colour, resource reference, asset path', a
     assertScope(lines, 3, '/DreamGUI/DefaultFont_DistanceField', 'entity.name.namespace.assetpath.dui');
 });
 
+test('enum values are constants, aligned spelling included -- the blank-value defect', async () => {
+    const lines = await tokenize([
+        '        HAlign   = Left',
+        '        @slot SizeRule = Auto',
+        '        @slot VerticalAlignment   = Fill',
+    ]);
+    assertScope(lines, 0, 'HAlign', 'variable.other.property.dui');
+    assertScope(lines, 0, '=', 'keyword.operator.assignment.dui');
+    assertScope(lines, 0, 'Left', 'support.constant.property-value.dui');
+    // The '@slot' line's '=' and value used to have no scope at all.
+    assertScope(lines, 1, '=', 'keyword.operator.assignment.dui');
+    assertScope(lines, 1, 'Auto', 'support.constant.property-value.dui');
+    assertScope(lines, 2, 'Fill', 'support.constant.property-value.dui');
+});
+
+test('booleans and trailing comments keep their own scopes inside a value', async () => {
+    const lines = await tokenize([
+        '        bOverrideWidth = true',
+        '        FontSize = 18 // aligned',
+    ]);
+    assertScope(lines, 0, 'true', 'constant.language.boolean.dui');
+    assertScope(lines, 1, '// aligned', 'comment.line.double-slash.dui');
+});
+
 test('a loop header: keyword, variable, in', async () => {
     const lines = await tokenize(['    for Row in GetRows() {']);
     assertScope(lines, 0, 'for', 'keyword.control.loop.dui');
