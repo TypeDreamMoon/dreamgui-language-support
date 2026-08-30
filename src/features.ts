@@ -13,6 +13,16 @@ function propertyItem(info: PropertyInfo): vscode.CompletionItem {
     item.detail = info.enum ?? info.type;
     item.insertText = `${info.name} = `;
     item.command = { command: 'editor.action.triggerSuggest', title: 'suggest' };
+    const documentation = new vscode.MarkdownString();
+    if (info.tooltip) {
+        documentation.appendMarkdown(info.tooltip);
+    }
+    if (info.default !== undefined) {
+        documentation.appendMarkdown(`${info.tooltip ? '\n\n' : ''}default \`${info.default}\``);
+    }
+    if (documentation.value) {
+        item.documentation = documentation;
+    }
     return item;
 }
 
@@ -181,14 +191,22 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
 
             const scope = scopeAt(document, position);
             const symbols = store.symbols;
+            const withTooltip = (md: vscode.MarkdownString, tooltip?: string): vscode.MarkdownString => {
+                if (tooltip) {
+                    md.appendMarkdown(`\n\n${tooltip}`);
+                }
+                return md;
+            };
             if (symbols?.tags[word]) {
                 const info = symbols.tags[word];
-                return new vscode.Hover(new vscode.MarkdownString(
-                    info.class ? `**${word}** — visual class \`${info.class}\`` : `**${word}** — a plain widget, no visual`));
+                return new vscode.Hover(withTooltip(new vscode.MarkdownString(
+                    info.class ? `**${word}** — visual class \`${info.class}\`` : `**${word}** — a plain widget, no visual`),
+                    info.tooltip));
             }
             const component = store.componentInfo(word);
             if (component && /^\s*\+/.test(document.lineAt(position.line).text)) {
-                return new vscode.Hover(new vscode.MarkdownString(`**${word}** — \`${component.class}\``));
+                return new vscode.Hover(withTooltip(
+                    new vscode.MarkdownString(`**${word}** — \`${component.class}\``), component.tooltip));
             }
             const list = scope?.kind === 'component'
                 ? store.componentInfo(scope.name)?.properties ?? []
@@ -197,6 +215,10 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                 [...list, ...(symbols?.slotProperties ?? [])], word);
             if (property) {
                 const md = new vscode.MarkdownString(`\`${property.type}\` **${property.name}**`);
+                if (property.default !== undefined) {
+                    md.appendMarkdown(` — default \`${property.default}\``);
+                }
+                withTooltip(md, property.tooltip);
                 const values = store.enumValues(property.enum);
                 if (values.length > 0) {
                     md.appendMarkdown(`\n\n${values.map((v) => `\`${v}\``).join(' · ')}`);

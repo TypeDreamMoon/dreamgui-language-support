@@ -15,10 +15,15 @@ export interface PropertyInfo {
     type: string;
     enum?: string;
     literal?: string;
+    /** The UPROPERTY tooltip, as the details panel shows it. */
+    tooltip?: string;
+    /** The class default, spelled the way this language reads it back. */
+    default?: string;
 }
 
 export interface ClassInfo {
     class?: string;
+    tooltip?: string;
     properties?: PropertyInfo[];
     events?: string[];
 }
