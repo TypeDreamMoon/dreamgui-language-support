@@ -880,9 +880,10 @@ export function scopeAt(structure: StructureResult, offset: number): Scope | und
 
 /**
  * Builds the structural model for one file. Runs the scanner itself so callers hold one result
- * carrying both layers' diagnostics; lexical ones come first, as the compiler emits them.
+ * carrying both layers' diagnostics (lexical first, as the compiler emits them) and the token
+ * stream, for consumers that need token-level facts -- colours, brace balance, semantic tokens.
  */
-export function buildStructure(text: string): StructureResult & { lexical: DuiDiagnostic[] } {
+export function buildStructure(text: string): StructureResult & { lexical: DuiDiagnostic[]; tokens: Token[] } {
     const scanned = scan(text);
     const parser = new Parser(scanned.tokens);
     parser.parseFile();
@@ -893,7 +894,7 @@ export function buildStructure(text: string): StructureResult & { lexical: DuiDi
     }
     collectResourceRefs(scanned.tokens, parser.result);
 
-    return { ...parser.result, lexical: scanned.diagnostics };
+    return { ...parser.result, lexical: scanned.diagnostics, tokens: scanned.tokens };
 }
 
 /** Every `@Name` in value position: an '@' immediately followed by an identifier that is not a directive. */

@@ -211,10 +211,14 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
     context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider(selector, {
         provideDocumentSymbols(document) {
             const model = buildModel(document);
-            const toSymbol = (node: { tag: string; id: string; line: number; children: any[] }): vscode.DocumentSymbol => {
+            const kindOf = (kind: string): vscode.SymbolKind =>
+                kind === 'namedSlot' ? vscode.SymbolKind.Key
+                    : kind === 'loop' ? vscode.SymbolKind.Operator
+                        : vscode.SymbolKind.Field;
+            const toSymbol = (node: { kind: string; tag: string; id: string; line: number; children: any[] }): vscode.DocumentSymbol => {
                 const range = document.lineAt(node.line).range;
                 const symbol = new vscode.DocumentSymbol(
-                    node.id, node.tag, vscode.SymbolKind.Field, range, range);
+                    node.id || node.tag, node.tag, kindOf(node.kind), range, range);
                 symbol.children = node.children.map(toSymbol);
                 return symbol;
             };

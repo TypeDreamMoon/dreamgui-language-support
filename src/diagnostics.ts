@@ -1,12 +1,18 @@
 /**
- * The cheap checks, on every edit: what can be told from one file and a symbols dump, at severities
- * that respect what this extension cannot know. The COMPILER is the authority; nothing here may
- * claim an error the compiler would accept, so anything that depends on classes this file cannot
- * see is a warning at most, and most things are quieter than that.
+ * Diagnostics, on every edit, from three places with three levels of certainty:
+ *
+ *   - the core scanner and structure layer: codes whose verdict one file's characters fully
+ *     determine, at the severity the compiler itself uses (a mirror that says MORE than the
+ *     compiler is the failure mode this extension is not allowed to have);
+ *   - the symbols dump: checks that depend on what the plugin exported, warnings at most;
+ *   - the tag sweep: information only -- a tag can also be an asset path, and the compiler's own
+ *     message is the real verdict.
  */
 import * as vscode from 'vscode';
 import { SymbolStore } from './symbols';
-import { buildModel } from './docmodel';
+import { buildModel, OutlineNode } from './docmodel';
+import { DuiDiagnostic } from './core/structure';
+import { formatCode } from './core/scanner';
 
 export function registerDiagnostics(context: vscode.ExtensionContext, store: SymbolStore): void {
     const collection = vscode.languages.createDiagnosticCollection('dui');
@@ -20,59 +26,54 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
         const model = buildModel(document);
         const diagnostics: vscode.Diagnostic[] = [];
 
-        // Brace balance: the one thing that is an error from any distance.
-        if (model.firstUnmatchedClose) {
-            diagnostics.push(new vscode.Diagnostic(
-                new vscode.Range(model.firstUnmatchedClose, model.firstUnmatchedClose.translate(0, 1)),
-                "'}' closes nothing", vscode.DiagnosticSeverity.Error));
-        } else if (model.braceBalance > 0) {
-            const last = document.lineAt(Math.max(0, document.lineCount - 1)).range;
-            diagnostics.push(new vscode.Diagnostic(last,
-                `${model.braceBalance} block(s) never closed`, vscode.DiagnosticSeverity.Error));
+        const fromCore = (source: DuiDiagnostic): vscode.Diagnostic => {
+            const range = new vscode.Range(
+                document.positionAt(source.start),
+                document.positionAt(Math.max(source.end, source.start + 1)));
+            const diagnostic = new vscode.Diagnostic(range,
+                `${formatCode(source.code)}: ${source.message}`,
+                source.severity === 'error'
+                    ? vscode.DiagnosticSeverity.Error
+                    : vscode.DiagnosticSeverity.Warning);
+            diagnostic.code = formatCode(source.code);
+            diagnostic.source = 'dui';
+            return diagnostic;
+        };
+        for (const lexical of model.structure.lexical) {
+            diagnostics.push(fromCore(lexical));
+        }
+        for (const structural of model.structure.diagnostics) {
+            diagnostics.push(fromCore(structural));
         }
 
-        // '@Name' against this file's own resources block. DUI4007 is the compiler's code for the
-        // same refusal; using it here means the squiggle and the compile error read as one fact.
-        const declared = new Set(model.resources.map((entry) => entry.name));
+        // A stray '}' at the top level: the structure layer steps over it (the compiler words that
+        // refusal), but leaving it entirely unmarked reads as "fine". No code on purpose.
+        let depth = 0;
+        for (const token of model.structure.tokens) {
+            if (token.kind === 'openBrace') {
+                depth++;
+            } else if (token.kind === 'closeBrace') {
+                depth--;
+                if (depth < 0) {
+                    diagnostics.push(new vscode.Diagnostic(
+                        new vscode.Range(document.positionAt(token.start), document.positionAt(token.end)),
+                        "'}' closes nothing", vscode.DiagnosticSeverity.Error));
+                    depth = 0;
+                }
+            }
+        }
+
+        // '@Name' against this file's own resources block, case insensitively as FindResource
+        // compares them. DUI4007 is the compiler's code for the same refusal.
+        const declared = new Set(model.resources.map((entry) => entry.name.toLowerCase()));
         for (const ref of model.resourceRefs) {
-            if (!declared.has(ref.name)) {
+            if (!declared.has(ref.name.toLowerCase())) {
                 const range = new vscode.Range(ref.line, ref.character, ref.line, ref.character + ref.name.length + 1);
                 const diagnostic = new vscode.Diagnostic(range,
                     `DUI4007: '@${ref.name}' names no entry in a resources block`,
                     vscode.DiagnosticSeverity.Warning);
                 diagnostic.code = 'DUI4007';
-                diagnostics.push(diagnostic);
-            }
-        }
-
-        // Duplicate resource names -- the compiler's DUI3014, told a compile earlier.
-        const seen = new Map<string, number>();
-        for (const entry of model.resources) {
-            const first = seen.get(entry.name);
-            if (first !== undefined) {
-                const start = entry.nameStart >= 0 ? entry.nameStart : 0;
-                const diagnostic = new vscode.Diagnostic(
-                    new vscode.Range(entry.line, start, entry.line, start + entry.name.length),
-                    `DUI3014: resource '${entry.name}' is declared twice (first on line ${first + 1})`,
-                    vscode.DiagnosticSeverity.Warning);
-                diagnostic.code = 'DUI3014';
-                diagnostics.push(diagnostic);
-            } else {
-                seen.set(entry.name, entry.line);
-            }
-        }
-
-        // Unknown style bases, same one-file logic.
-        const styleNames = new Set(model.styles.map((style) => style.name));
-        for (const style of model.styles) {
-            if (style.base && !styleNames.has(style.base)) {
-                const text = document.lineAt(style.line).text;
-                const at = Math.max(0, text.indexOf(style.base));
-                const diagnostic = new vscode.Diagnostic(
-                    new vscode.Range(style.line, at, style.line, at + style.base.length),
-                    `DUI3004: style '${style.name}' inherits '${style.base}', which this file does not declare`,
-                    vscode.DiagnosticSeverity.Warning);
-                diagnostic.code = 'DUI3004';
+                diagnostic.source = 'dui';
                 diagnostics.push(diagnostic);
             }
         }
@@ -81,17 +82,18 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
         // asset path, and the compiler's own message is the real verdict.
         const symbols = store.symbols;
         if (symbols) {
-            for (const line of walkOutline(model.outline)) {
-                if (!symbols.tags[line.tag] && !line.tag.startsWith('/')) {
-                    const text = document.lineAt(line.line).text;
-                    const at = Math.max(0, text.indexOf(line.tag));
-                    const diagnostic = new vscode.Diagnostic(
-                        new vscode.Range(line.line, at, line.line, at + line.tag.length),
-                        `'${line.tag}' is not a built-in tag (the compiler also accepts /asset paths)`,
-                        vscode.DiagnosticSeverity.Information);
-                    diagnostics.push(diagnostic);
+            const visit = (node: OutlineNode): void => {
+                if (node.kind === 'node' && !symbols.tags[node.tag] && !node.tag.startsWith('/')) {
+                    const text = document.lineAt(node.line).text;
+                    const at = Math.max(0, text.indexOf(node.tag));
+                    diagnostics.push(new vscode.Diagnostic(
+                        new vscode.Range(node.line, at, node.line, at + node.tag.length),
+                        `'${node.tag}' is not a built-in tag (the compiler also accepts /asset paths)`,
+                        vscode.DiagnosticSeverity.Information));
                 }
-            }
+                node.children.forEach(visit);
+            };
+            model.outline.forEach(visit);
         }
 
         collection.set(document.uri, diagnostics);
@@ -107,12 +109,5 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
     }));
     for (const editor of vscode.window.visibleTextEditors) {
         refresh(editor.document);
-    }
-}
-
-function* walkOutline(nodes: { tag: string; line: number; children: any[] }[]): Generator<{ tag: string; line: number }> {
-    for (const node of nodes) {
-        yield node;
-        yield* walkOutline(node.children);
     }
 }
