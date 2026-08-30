@@ -14,6 +14,7 @@ import { registerNewFile } from './newFile';
 import { registerStatusBar } from './statusBar';
 import { registerQuickfixes } from './quickfix';
 import { registerExplain } from './explain';
+import { registerWorkspaceIndex } from './workspace';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -37,6 +38,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerStatusBar(context, store);
     registerQuickfixes(context);
     registerExplain(context);
+    registerWorkspaceIndex(context);
 }
 
 export function deactivate(): void {}
