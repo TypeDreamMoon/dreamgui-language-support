@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- A .dui file: a panel with a header bar and one centred widget -- the starter file, as an icon. -->
+  <rect x="1.5" y="2" width="13" height="12" rx="2" fill="none" stroke="#8FA7EE" stroke-width="1.5"/>
+  <line x1="4" y1="5.4" x2="9" y2="5.4" stroke="#8FA7EE" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="5.6" y="8" width="4.8" height="3.2" rx="0.8" fill="#8FA7EE"/>
+</svg>

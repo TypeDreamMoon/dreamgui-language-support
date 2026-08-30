@@ -20,6 +20,8 @@ test('the language id is dui and claims the .dui extension', () => {
 test('every contributed file path exists', () => {
     const paths: string[] = [
         manifest.contributes.languages[0].configuration,
+        manifest.contributes.languages[0].icon.light,
+        manifest.contributes.languages[0].icon.dark,
         manifest.contributes.grammars[0].path,
         manifest.contributes.snippets[0].path,
     ];

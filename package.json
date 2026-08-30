@@ -39,7 +39,11 @@
         "extensions": [
           ".dui"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./resources/dui-light.svg",
+          "dark": "./resources/dui-dark.svg"
+        }
       }
     ],
     "grammars": [
