@@ -13,6 +13,7 @@ import { registerEditing } from './editing';
 import { registerNewFile } from './newFile';
 import { registerStatusBar } from './statusBar';
 import { registerQuickfixes } from './quickfix';
+import { registerExplain } from './explain';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -35,6 +36,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerNewFile(context);
     registerStatusBar(context, store);
     registerQuickfixes(context);
+    registerExplain(context);
 }
 
 export function deactivate(): void {}
