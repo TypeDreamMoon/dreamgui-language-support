@@ -46,6 +46,8 @@ export interface StructNode {
     styleNameColumn?: number;
     components: StructComponent[];
     children: StructNode[];
+    /** The node's own property statements, '@slot' ones included and flagged. */
+    properties: PropertyStmt[];
     /** Offsets of the body: first token after '{', and the '}' itself. Absent when there is no block. */
     bodyStart?: number;
     bodyEnd?: number;
@@ -72,6 +74,7 @@ export interface StyleDecl {
     baseColumn?: number;
     bodyStart?: number;
     bodyEnd?: number;
+    properties: PropertyStmt[];
 }
 
 export interface ResourceDecl {
@@ -93,6 +96,22 @@ export interface ResourceRef {
     column: number;
     /** Offset of the '@'. */
     start: number;
+}
+
+/** One property statement, as spans into the source. */
+export interface PropertyStmt {
+    /** The dotted path as written. */
+    path: string;
+    pathStart: number;
+    /** Whole statement: first path token to the end of the value. */
+    start: number;
+    end: number;
+    op: 'equals' | 'arrow' | 'eventArrow';
+    /** True when the statement was led by '@slot'. */
+    isSlot: boolean;
+    /** Value span (op 'equals' only). */
+    valueStart?: number;
+    valueEnd?: number;
 }
 
 /** One `Prop <- Func()` binding or `Event -> Handler` route. */
@@ -286,6 +305,7 @@ class Parser {
         const style: StyleDecl = {
             name: nameToken.text,
             line: keyword.line, column: keyword.column, nameStart: nameToken.start,
+            properties: [],
         };
         this.advance();
 
@@ -303,7 +323,7 @@ class Parser {
             const open = this.current();
             this.advance();
             style.bodyStart = this.current().start;
-            this.parsePropertyOnlyBlock(open);
+            this.parsePropertyOnlyBlock(open, style.properties);
             style.bodyEnd = this.tokens[Math.max(0, this.index - 1)].start;
             this.result.scopes.push({ kind: 'style', name: style.name, bodyStart: style.bodyStart, bodyEnd: style.bodyEnd });
         }
@@ -393,7 +413,7 @@ class Parser {
         const node: StructNode = {
             kind: 'node', tag: typeToken.text, id: '',
             line: typeToken.line, column: typeToken.column, start: typeToken.start,
-            components: [], children: [],
+            components: [], children: [], properties: [],
         };
 
         if (this.check('identifier')) {
@@ -512,7 +532,10 @@ class Parser {
             if (this.checkKeyword('slot')) {
                 this.advance();
                 if (this.looksLikeProperty()) {
-                    this.parseProperty();
+                    const stmt = this.parseProperty(true);
+                    if (stmt) {
+                        node.properties.push(stmt);
+                    }
                     return;
                 }
             }
@@ -534,7 +557,10 @@ class Parser {
             return;
         }
         if (this.looksLikeProperty()) {
-            this.parseProperty();
+            const stmt = this.parseProperty();
+            if (stmt) {
+                node.properties.push(stmt);
+            }
             return;
         }
         const child = this.parseNode();
@@ -555,13 +581,15 @@ class Parser {
         return next === 'dot' || next === 'equals' || next === 'arrow' || next === 'eventArrow';
     }
 
-    private parseProperty(): void {
+    private parseProperty(isSlot = false): PropertyStmt | undefined {
         // The dotted path.
         const first = this.current();
         let pathEnd = first.end;
+        let path = first.text;
         this.advance();
         while (this.check('dot') && this.peek(1).kind === 'identifier') {
             this.advance();
+            path += '.' + this.current().text;
             pathEnd = this.current().end;
             this.advance();
         }
@@ -576,14 +604,24 @@ class Parser {
                 this.advance();
             }
             this.parseValueUntilBoundary(); // the '()' a binding carries
-            return;
+            return {
+                path, pathStart: first.start, start: first.start,
+                end: this.tokens[Math.max(0, this.index - 1)].end,
+                op: isEvent ? 'eventArrow' : 'arrow', isSlot,
+            };
         }
         if (this.check('equals')) {
             this.advance();
+            const valueStart = this.current().start;
             this.parseValueUntilBoundary();
-            return;
+            const valueEnd = Math.max(valueStart, this.tokens[Math.max(0, this.index - 1)].end);
+            return {
+                path, pathStart: first.start, start: first.start, end: valueEnd,
+                op: 'equals', isSlot, valueStart, valueEnd,
+            };
         }
         this.skipToStatementBoundary();
+        return undefined;
     }
 
     /** Consumes a value up to the statement boundary, pairing tuples and reporting DUI2003. */
@@ -647,7 +685,7 @@ class Parser {
         node.components.push(component);
     }
 
-    private parsePropertyOnlyBlock(open: Token): void {
+    private parsePropertyOnlyBlock(open: Token, out?: PropertyStmt[]): void {
         for (;;) {
             this.skipSeparators();
             if (this.check('closeBrace')) {
@@ -660,7 +698,10 @@ class Parser {
             }
             const before = this.index;
             if (this.looksLikeProperty()) {
-                this.parseProperty();
+                const stmt = this.parseProperty();
+                if (stmt && out) {
+                    out.push(stmt);
+                }
             } else {
                 this.skipToStatementBoundary();
             }
@@ -679,7 +720,7 @@ class Parser {
             kind: 'namedSlot', tag: 'slot', id: nameToken.text,
             idLine: nameToken.line, idColumn: nameToken.column, idStart: nameToken.start,
             line: keyword.line, column: keyword.column, start: keyword.start,
-            components: [], children: [],
+            components: [], children: [], properties: [],
         };
         if (RESERVED_WORDS.has(slot.id)) {
             this.error(3002, `'${slot.id}' is a keyword and cannot name a slot`, nameToken);
@@ -706,7 +747,7 @@ class Parser {
             kind: 'loop', tag: keyword.text, id: variableToken.text,
             idLine: variableToken.line, idColumn: variableToken.column, idStart: variableToken.start,
             line: keyword.line, column: keyword.column, start: keyword.start,
-            components: [], children: [],
+            components: [], children: [], properties: [],
         };
         this.advance();
 

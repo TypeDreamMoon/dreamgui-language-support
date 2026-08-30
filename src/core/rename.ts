@@ -41,7 +41,8 @@ export interface RenamePlan {
 
 const fold = (name: string): string => name.toLowerCase();
 
-function isValidName(name: string): string | undefined {
+/** Why `name` cannot be a .dui name, or undefined when it can. Shared with the refactors. */
+export function isValidName(name: string): string | undefined {
     if (name.length === 0) {
         return '名字不能为空。';
     }

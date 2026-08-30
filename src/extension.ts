@@ -17,6 +17,7 @@ import { registerExplain } from './explain';
 import { registerWorkspaceIndex } from './workspace';
 import { registerNavigation } from './navigation';
 import { registerRename } from './renameProvider';
+import { registerRefactors } from './refactorActions';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -43,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const workspaceHost = registerWorkspaceIndex(context);
     registerNavigation(context, workspaceHost);
     registerRename(context);
+    registerRefactors(context);
 }
 
 export function deactivate(): void {}
