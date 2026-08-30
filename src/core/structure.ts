@@ -37,6 +37,9 @@ export interface StructNode {
     column: number;
     start: number;
     wasId?: string;
+    /** The whole '(was: X)' clause, opening paren to closing paren inclusive. */
+    wasStart?: number;
+    wasEnd?: number;
     styleName?: string;
     styleNameStart?: number;
     styleNameLine?: number;
@@ -456,10 +459,13 @@ class Parser {
     }
 
     private parseWasClause(node: StructNode): void {
+        const open = this.current();
         this.advance(); // '('
         if (this.checkKeyword('was') && this.peek(1).kind === 'colon'
             && this.peek(2).kind === 'identifier' && this.peek(3).kind === 'closeParen') {
             node.wasId = this.peek(2).text;
+            node.wasStart = open.start;
+            node.wasEnd = this.peek(3).end;
             this.advance(); this.advance(); this.advance(); this.advance();
             return;
         }

@@ -16,6 +16,7 @@ import { registerQuickfixes } from './quickfix';
 import { registerExplain } from './explain';
 import { registerWorkspaceIndex } from './workspace';
 import { registerNavigation } from './navigation';
+import { registerRename } from './renameProvider';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -41,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerExplain(context);
     const workspaceHost = registerWorkspaceIndex(context);
     registerNavigation(context, workspaceHost);
+    registerRename(context);
 }
 
 export function deactivate(): void {}
