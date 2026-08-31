@@ -456,8 +456,18 @@ class Parser {
         const typeToken = this.current();
         this.advance();
 
+        let tag = typeToken.text;
+        // `Native.Toggle` -- a scoped tag. The scanner hands it over as identifier/dot/identifier
+        // because a dot elsewhere separates property path segments; the tag position is the one
+        // place they mean a single name, joined here exactly as the compiler joins them.
+        if (this.check('dot') && this.peek(1).kind === 'identifier') {
+            this.advance();
+            tag = `${tag}.${this.current().text}`;
+            this.advance();
+        }
+
         const node: StructNode = {
-            kind: 'node', tag: typeToken.text, id: '',
+            kind: 'node', tag, id: '',
             line: typeToken.line, column: typeToken.column, start: typeToken.start,
             components: [], children: [], properties: [],
         };
@@ -624,7 +634,19 @@ class Parser {
             return false;
         }
         const next = this.peek(1).kind;
-        return next === 'dot' || next === 'equals' || next === 'arrow' || next === 'eventArrow'
+        if (next === 'dot') {
+            // `AnchorData.SizeDelta = ...` is a property; `Native.Toggle Mute {` is a node whose
+            // tag has a scope. Walk the dotted run and let what FOLLOWS it decide, exactly as the
+            // compiler's parser does.
+            let ahead = 1;
+            while (this.peek(ahead).kind === 'dot' && this.peek(ahead + 1).kind === 'identifier') {
+                ahead += 2;
+            }
+            const after = this.peek(ahead).kind;
+            return after === 'equals' || after === 'arrow' || after === 'eventArrow'
+                || after === 'twoWayArrow';
+        }
+        return next === 'equals' || next === 'arrow' || next === 'eventArrow'
             || next === 'twoWayArrow';
     }
 

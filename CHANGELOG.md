@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0 — 2026-09-01
+
+The scoped-tag release, and the end of three import false positives.
+
+- **`Native.Toggle` scoped tags**: the compiler grew a widget registry (`DECLARE_DREAM_GUI_WIDGET`),
+  and a node tag may now be `Scope.Name`. The structure layer joins the dotted tag exactly as the
+  compiler's parser does — the dispatch walks a dotted run and lets what FOLLOWS decide, so
+  `AnchorData.SizeDelta = ...` is still a property and `Native.Toggle Mute {` is a node. Grammar
+  highlighting already accepted dots in tags; no grammar change.
+- **`use` imports stop lying**: a style arriving through a `use` import no longer trips DUI3004,
+  an imported `@resource` no longer trips DUI4007, and a pure declaration library (styles or
+  resources, no root node) no longer trips DUI2006. The withholding happens at the publisher with
+  workspace knowledge — the single-file layers still judge single files, and only a UNIQUE import
+  resolution is trusted, so reporting stays "less than the compiler, never different".
+
+
 ## 0.5.1 — 2026-08-31
 
 - **Code table**: DUI5013 explained in Chinese. The compiler gained intra-tree node references —

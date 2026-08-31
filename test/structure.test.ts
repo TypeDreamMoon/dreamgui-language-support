@@ -328,6 +328,37 @@ test('DUI3002: use is a keyword now, and cannot be a node id', () => {
 
 // ---- fixture sweep -----------------------------------------------------------------------------
 
+test('a scoped tag is one node, and a dotted path is still a property', () => {
+    const structure = buildStructure(`class /Game/UI/WBP_X
+
+Widget Root {
+    AnchorData.SizeDelta = (0, 30)
+
+    Native.Toggle Mute {
+        Label = "muted"
+    }
+}
+`);
+    assert.equal(structure.diagnostics.length, 0);
+    assert.equal(structure.roots.length, 1);
+    const root = structure.roots[0];
+    assert.equal(root.properties.some((property) => property.path === 'AnchorData.SizeDelta'), true);
+    assert.equal(root.children.length, 1);
+    assert.equal(root.children[0].tag, 'Native.Toggle');
+    assert.equal(root.children[0].id, 'Mute');
+});
+
+test('a dotted run ending in an arrow reads as a binding, not a node', () => {
+    const structure = buildStructure(`class /Game/UI/WBP_X
+
+Widget Root {
+    Brush.TintColor <- GetInk()
+}
+`);
+    assert.equal(structure.roots[0].children.length, 0);
+    assert.equal(structure.bindings.length, 1);
+});
+
 test('the real SettingsPanel.dui produces zero structural diagnostics', () => {
     const fixture = fs.readFileSync(path.join(__dirname, '..', '..', 'test', 'fixtures', 'SettingsPanel.dui'), 'utf8');
     const built = buildStructure(fixture);

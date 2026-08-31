@@ -13,8 +13,10 @@ import { SymbolStore } from './symbols';
 import { buildModel, OutlineNode } from './docmodel';
 import { DuiDiagnostic } from './core/structure';
 import { formatCode } from './core/scanner';
+import { WorkspaceIndex } from './core/workspaceIndex';
 
-export function registerDiagnostics(context: vscode.ExtensionContext, store: SymbolStore): void {
+export function registerDiagnostics(context: vscode.ExtensionContext, store: SymbolStore,
+    index?: WorkspaceIndex): void {
     const collection = vscode.languages.createDiagnosticCollection('dui');
     context.subscriptions.push(collection);
 
@@ -25,6 +27,41 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
         store.ensureLoadedFor(document.uri.fsPath);
         const model = buildModel(document);
         const diagnostics: vscode.Diagnostic[] = [];
+
+        // What `use` imports bring into scope. The structure layer judges one file's characters;
+        // styles and resources arriving through imports are workspace knowledge, so the refusals
+        // that would be wrong for them are withheld HERE rather than taught to the parser. A
+        // spelling that resolves to nothing (or ambiguously) imports nothing -- reporting less
+        // than the compiler is allowed, reporting differently is not, so only a UNIQUE resolution
+        // is trusted.
+        const importedStyles = new Set<string>();
+        const importedResources = new Set<string>();
+        if (index) {
+            for (const directive of model.structure.imports) {
+                const matches = index.resolveImportSpelling(directive.path);
+                if (matches.length !== 1) {
+                    continue;
+                }
+                const summary = index.summaryOf(matches[0]);
+                if (!summary) {
+                    continue;
+                }
+                for (const style of summary.styles) {
+                    importedStyles.add(style.name.toLowerCase());
+                }
+                for (const resource of summary.resources) {
+                    importedResources.add(resource.name.toLowerCase());
+                }
+            }
+        }
+        const importCoversStyle = (message: string): boolean => {
+            const named = /^'([^']+)' names a style this file does not declare/.exec(message);
+            return named !== null && importedStyles.has(named[1].toLowerCase());
+        };
+        // A style-and-resource library legitimately declares no root: the compiler only demands a
+        // root of a file it compiles AS a class, and an imported file is read for its declarations.
+        const isDeclarationLibrary = model.structure.roots.length === 0
+            && (model.structure.styles.length > 0 || model.resources.length > 0);
 
         const fromCore = (source: DuiDiagnostic): vscode.Diagnostic => {
             const range = new vscode.Range(
@@ -43,6 +80,12 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
             diagnostics.push(fromCore(lexical));
         }
         for (const structural of model.structure.diagnostics) {
+            if (structural.code === 3004 && importCoversStyle(structural.message)) {
+                continue;
+            }
+            if (structural.code === 2006 && isDeclarationLibrary) {
+                continue;
+            }
             diagnostics.push(fromCore(structural));
         }
 
@@ -67,7 +110,7 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
         // compares them. DUI4007 is the compiler's code for the same refusal.
         const declared = new Set(model.resources.map((entry) => entry.name.toLowerCase()));
         for (const ref of model.resourceRefs) {
-            if (!declared.has(ref.name.toLowerCase())) {
+            if (!declared.has(ref.name.toLowerCase()) && !importedResources.has(ref.name.toLowerCase())) {
                 const range = new vscode.Range(ref.line, ref.character, ref.line, ref.character + ref.name.length + 1);
                 const diagnostic = new vscode.Diagnostic(range,
                     `DUI4007: '@${ref.name}' names no entry in a resources block`,

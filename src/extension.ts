@@ -37,7 +37,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
 
     registerFeatures(context, store);
-    registerDiagnostics(context, store);
+    const workspaceHost = registerWorkspaceIndex(context);
+    registerDiagnostics(context, store, workspaceHost.index);
     registerColors(context);
     registerSemanticTokens(context);
     registerEditing(context);
@@ -46,7 +47,6 @@ export function activate(context: vscode.ExtensionContext): void {
     registerStatusBar(context, store, mailbox);
     registerQuickfixes(context);
     registerExplain(context);
-    const workspaceHost = registerWorkspaceIndex(context);
     registerNavigation(context, workspaceHost);
     registerRename(context);
     registerRefactors(context);
