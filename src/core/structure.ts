@@ -637,14 +637,14 @@ class Parser {
         if (next === 'dot') {
             // `AnchorData.SizeDelta = ...` is a property; `Native.Toggle Mute {` is a node whose
             // tag has a scope. Walk the dotted run and let what FOLLOWS it decide, exactly as the
-            // compiler's parser does.
+            // compiler's parser does -- and only an id or an open brace reads as a node, so a
+            // property missing its '=' still fails as the property it was meant to be.
             let ahead = 1;
             while (this.peek(ahead).kind === 'dot' && this.peek(ahead + 1).kind === 'identifier') {
                 ahead += 2;
             }
             const after = this.peek(ahead).kind;
-            return after === 'equals' || after === 'arrow' || after === 'eventArrow'
-                || after === 'twoWayArrow';
+            return after !== 'identifier' && after !== 'openBrace';
         }
         return next === 'equals' || next === 'arrow' || next === 'eventArrow'
             || next === 'twoWayArrow';
