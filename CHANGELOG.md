@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-08-31
+
+- **Code table**: DUI5013 explained in Chinese. The compiler gained intra-tree node references —
+  an object property may now name a node declared in the same file instead of an asset path —
+  and 5013 is what it reports when that name matches nothing. No syntax changed: a value that
+  starts with `/` is still an asset path, so nothing in the lexer or the grammar moved.
+
 ## 0.5.0 — 2026-08-30
 
 The language grew; the extension keeps up. Lexer and mirror track the compiler's 2026-08-30
