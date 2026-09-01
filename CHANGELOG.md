@@ -9,6 +9,12 @@ The scoped-tag release, and the end of three import false positives.
   compiler's parser does — the dispatch walks a dotted run and lets what FOLLOWS decide, so
   `AnchorData.SizeDelta = ...` is still a property and `Native.Toggle Mute {` is a node. Grammar
   highlighting already accepted dots in tags; no grammar change.
+- **and the symbols file now HAS them.** The plugin's exporter only ever read the builder's visual
+  tag table, so `.dui-symbols.json` carried the ten primitives and not one of the seventeen
+  `Native.*` controls — completion offered none of them and every one read as an unknown tag. The
+  exporter now walks the widget registry too, keyed `Scope.Name`, with each control's properties,
+  events and tooltips. Nothing in the extension changed for this; **re-export the file** (open the
+  editor once, or run `DreamUI.ExportSymbols` in its console) to pick the controls up.
 - **`use` imports stop lying**: a style arriving through a `use` import no longer trips DUI3004,
   an imported `@resource` no longer trips DUI4007, and a pure declaration library (styles or
   resources, no root node) no longer trips DUI2006. The withholding happens at the publisher with
