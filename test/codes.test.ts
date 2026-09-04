@@ -22,6 +22,33 @@ test('every entry is whole: title, explanation, fix', () => {
     }
 });
 
+/**
+ * The codes the extension never raises itself but the mailbox delivers. Listed by hand rather than
+ * derived, because the whole point is to notice when the compiler grows one: a code with no entry
+ * arrives in Problems as a number and nothing else.
+ */
+const COMPILER_ONLY = [
+    2001, 2005, 2007, 2008, 2009, 2010, 2011, 2012,
+    3003, 3006, 3009, 3013,
+    4001, 4002, 4003, 4004, 4005, 4006, 4008,
+    5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010, 5011, 5012, 5013, 5014,
+    6001, 6002, 6003, 6004, 6005,
+    7001, 7002, 7003,
+];
+
+test('every code the compiler can send explains itself too', () => {
+    for (const code of COMPILER_ONLY) {
+        assert.ok(CODE_EXPLANATIONS[code], `DUI${code} can arrive from the compiler but is unexplained`);
+    }
+});
+
+test('the table holds nothing but the compiler\'s two halves -- no invented numbers', () => {
+    const known = new Set([...LOCALLY_RAISED, ...COMPILER_ONLY]);
+    for (const code of Object.keys(CODE_EXPLANATIONS)) {
+        assert.ok(known.has(Number(code)), `DUI${code} is explained but nothing can raise it`);
+    }
+});
+
 test('explainCode renders markdown with the code in its heading', () => {
     const markdown = explainCode(3001)!;
     assert.match(markdown, /^# DUI3001/);

@@ -146,6 +146,16 @@ function isInlineWhitespace(code: number): boolean {
 export const RESERVED_WORDS: ReadonlySet<string> =
     new Set(['class', 'style', 'resources', 'slot', 'for', 'each', 'in', 'was', 'use']);
 
+/**
+ * `NAME_SIZE` from the engine's UnrealNames.h -- the one length rule this grammar has, and the
+ * only constant here that is not a fact about the text itself.
+ *
+ * Both sides count UTF-16 units (FString's TCHAR on Windows, a JS string's `.length`), so a CJK
+ * id measures the same in both implementations. If the engine ever moves the number, this line
+ * moves with the compiler's lexer, in the same commit, like everything else in this file.
+ */
+export const NAME_SIZE = 1024;
+
 /** Clamped so a .dui path accidentally aimed at a .png reports a readable snippet, not the file. */
 function ellipsize(text: string, maxLength = 16): string {
     return text.length <= maxLength ? text : text.slice(0, maxLength) + '...';
@@ -408,7 +418,25 @@ class Lexer {
         while (this.offset < this.text.length && isIdentifierChar(this.text.charCodeAt(this.offset))) {
             this.offset++;
         }
-        this.emit('identifier', start, this.text.slice(start, this.offset), line, column);
+
+        // DUI1006. Every word a .dui writes down becomes an FName somewhere downstream -- a node id
+        // becomes a member variable, a property name a lookup key, a handler a function name -- and
+        // FName does not REFUSE a string of NAME_SIZE characters or more, it calls checkf(false) and
+        // takes the editor with it. The compiler catches it at the token so one rule covers every
+        // position a word can appear in; this mirror does the same, on the buffer, before the save
+        // that would hand the editor the file that kills it.
+        //
+        // Truncated rather than withheld, exactly as the compiler emits it: the layers above have to
+        // find a name where a name belongs in order to go on answering "what is where", and the file
+        // already carries an error, so nothing is ever built from the shortened spelling.
+        let word = this.text.slice(start, this.offset);
+        if (word.length >= NAME_SIZE) {
+            this.addError(1006,
+                `'${ellipsize(word)}' is ${word.length} characters long, and a name here holds at most ${NAME_SIZE - 1}`,
+                start, this.offset, line, column);
+            word = word.slice(0, NAME_SIZE - 1);
+        }
+        this.emit('identifier', start, word, line, column);
     }
 
     private lexNumber(): void {

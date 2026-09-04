@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { scan, Token } from '../src/core/scanner';
+import { scan, Token, NAME_SIZE } from '../src/core/scanner';
 
 function kinds(source: string): string[] {
     return scan(source).tokens.map((token) => token.kind);
@@ -122,6 +122,37 @@ test('DUI1005: 3, 4, 6 and 8 digits are the colours', () => {
     assert.deepEqual(result.diagnostics, []);
     const colors = result.tokens.filter((token) => token.kind === 'hexColor').map((token) => token.text);
     assert.deepEqual(colors, ['FFF', 'FFFF', '1B1D23', 'AABBCCDD', '0077ff']);
+});
+
+// ---- DUI1006 identifier too long ---------------------------------------------------------------
+
+test('DUI1006: a name at NAME_SIZE is refused, one below it is not', () => {
+    assert.deepEqual(codes(`Text ${'A'.repeat(NAME_SIZE - 1)} {}`), []);
+    assert.deepEqual(codes(`Text ${'A'.repeat(NAME_SIZE)} {}`), [1006]);
+    assert.deepEqual(codes(`Text ${'A'.repeat(NAME_SIZE + 500)} {}`), [1006]);
+});
+
+test('DUI1006: the message ellipsizes the offender and names both lengths', () => {
+    const result = scan(`Text ${'A'.repeat(NAME_SIZE)} {}`);
+    assert.equal(result.diagnostics[0].message,
+        `'${'A'.repeat(16)}...' is ${NAME_SIZE} characters long, and a name here holds at most ${NAME_SIZE - 1}`);
+    assert.equal(result.diagnostics[0].line, 1);
+    assert.equal(result.diagnostics[0].column, 6);
+});
+
+test('DUI1006: the token is emitted truncated, so the file goes on lexing', () => {
+    const result = scan(`Text ${'A'.repeat(NAME_SIZE)} {\n    FontSize = 18\n}\n`);
+    const identifiers = result.tokens.filter((token) => token.kind === 'identifier');
+    assert.equal(identifiers[1].text.length, NAME_SIZE - 1);
+    // Everything after it still lexes: one diagnostic, and the property is still a property.
+    assert.deepEqual(result.diagnostics.map((d) => d.code), [1006]);
+    assert.deepEqual(identifiers.map((token) => token.text.length),
+        [4, NAME_SIZE - 1, 'FontSize'.length]);
+});
+
+test('DUI1006: length is counted in UTF-16 units, so a CJK name measures as the compiler measures it', () => {
+    assert.deepEqual(codes(`Text ${'名'.repeat(NAME_SIZE - 1)} {}`), []);
+    assert.deepEqual(codes(`Text ${'名'.repeat(NAME_SIZE)} {}`), [1006]);
 });
 
 // ---- token shapes the port must preserve -------------------------------------------------------

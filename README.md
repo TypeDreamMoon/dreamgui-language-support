@@ -20,9 +20,9 @@ Language support for DreamGUI `.dui` widget hierarchies.
   loops, styles and resources; **go to definition** for `@Name` and style uses; token-accurate
   **folding** (comment runs included) and **smart selection**.
 - **Diagnostics** with the compiler's own codes and wording, at the compiler's own severities:
-  the five lexical codes (DUI1001–1005), the structural ones a single file settles
-  (DUI2002/2003/2004/2006, 3001/3002/3004/3005/3008/3014/3015, and the rename-clause checks as
-  warnings), plus symbol-driven checks. The compiler stays the authority — anything it might
+  the six lexical codes (DUI1001–1006), the structural ones a single file settles
+  (DUI2002/2003/2004/2006/2013, 3001/3002/3004/3005/3008/3014/3015, and the rename-clause checks
+  as warnings), plus symbol-driven checks. The compiler stays the authority — anything it might
   accept is a warning here at most, and the project's real files sweep clean by test.
 - **Explanations**: every diagnostic offers an "解释 DUInnnn" action opening the bundled
   code-table entry — what it means, why it fired, how to fix it.

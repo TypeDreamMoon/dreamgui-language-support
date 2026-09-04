@@ -11,9 +11,10 @@
  *
  * Where this file does diagnose, the wording is the compiler's, verbatim, and the same rules
  * apply: names compare case insensitively (they all become FNames downstream), keywords compare
- * case sensitively. Three codes (DUI3010/3011/3012) are defined in the compiler's code table but
- * have no raise site there yet; they are reported here as warnings on the code table's own
- * reasoning, never as errors.
+ * case sensitively. Three codes (DUI3010/3011/3012) are reported here as warnings and never as
+ * errors: the compiler raises them as errors and its message is the fuller one, so these are the
+ * live hint that arrives before a compile does -- see MAILBOX_SUPPRESSED in core/mailbox.ts, which
+ * deliberately no longer filters them.
  *
  * No vscode import here: src/core/ is the seam a future LSP server or another IDE reuses.
  */
@@ -173,9 +174,24 @@ export interface StructureResult {
 
 const foldName = (name: string): string => name.toLowerCase();
 
+/**
+ * `DreamUIAst::MaxNestingDepth`, mirrored. Deep enough that no hand-written or generated .dui
+ * reaches it, so meeting it means a file that is malformed or hostile rather than merely deep.
+ *
+ * The reason this layer counts at all is the same reason the compiler does: both parsers are
+ * recursive descent, and a file nesting a thousand deep is answered by exhausting the stack. In
+ * the compiler that takes the editor with it; here it takes the extension host, and a dead host
+ * is every language feature in every open file, from one pasted file.
+ */
+export const MAX_NESTING_DEPTH = 256;
+
 class Parser {
     private index = 0;
     private readonly loopVariables: string[] = [];
+    /** How many nested block bodies the cursor is inside. One counter: the stack is one stack. */
+    private nestingDepth = 0;
+    /** DUI2013 is said once per file: a file that reaches the limit reaches it at every level. */
+    private reportedNestingLimit = false;
 
     readonly result: StructureResult = {
         roots: [], styles: [], resources: [], resourceRefs: [], bindings: [], imports: [], scopes: [], diagnostics: [],
@@ -555,24 +571,66 @@ class Parser {
         }
     }
 
-    private parseNodeBody(node: StructNode, open: Token): void {
-        for (;;) {
-            this.skipSeparators();
-            if (this.check('closeBrace')) {
-                this.advance();
-                return;
-            }
-            if (this.atEnd()) {
-                // Reported at the '{': the brace is where the reader has to go.
-                this.error(2002, "this '{' never reaches its '}'", open);
-                return;
-            }
+    /**
+     * True (and reported once) when the cursor is already as deep as this parser will descend.
+     *
+     * Reported at the '{' the way DUI2002 is, and for the same reason: the brace is where the
+     * reader has to go. The mirror counts BLOCKS only, where the compiler also spends the budget
+     * on parenthesised sub-expressions -- less than the compiler, never different, and the reason
+     * this code is not filtered out of the mailbox.
+     */
+    private isTooDeep(at: Token): boolean {
+        if (this.nestingDepth < MAX_NESTING_DEPTH) {
+            return false;
+        }
+        if (!this.reportedNestingLimit) {
+            this.reportedNestingLimit = true;
+            this.error(2013,
+                `this nests more than ${MAX_NESTING_DEPTH} levels deep; nothing below here was read`, at);
+        }
+        return true;
+    }
 
-            const before = this.index;
-            this.parseNodeStatement(node);
-            if (this.index === before) {
-                this.advance();
+    /** Steps over one block body, braces balanced, leaving the cursor past its '}'. */
+    private skipBalancedBlockBody(): void {
+        let depth = 1;
+        while (depth > 0 && !this.atEnd()) {
+            if (this.check('openBrace')) {
+                depth++;
+            } else if (this.check('closeBrace')) {
+                depth--;
             }
+            this.advance();
+        }
+    }
+
+    private parseNodeBody(node: StructNode, open: Token): void {
+        if (this.isTooDeep(open)) {
+            this.skipBalancedBlockBody();
+            return;
+        }
+        this.nestingDepth++;
+        try {
+            for (;;) {
+                this.skipSeparators();
+                if (this.check('closeBrace')) {
+                    this.advance();
+                    return;
+                }
+                if (this.atEnd()) {
+                    // Reported at the '{': the brace is where the reader has to go.
+                    this.error(2002, "this '{' never reaches its '}'", open);
+                    return;
+                }
+
+                const before = this.index;
+                this.parseNodeStatement(node);
+                if (this.index === before) {
+                    this.advance();
+                }
+            }
+        } finally {
+            this.nestingDepth--;
         }
     }
 
@@ -824,28 +882,37 @@ class Parser {
     }
 
     private parsePropertyOnlyBlock(open: Token, out?: PropertyStmt[]): void {
-        for (;;) {
-            this.skipSeparators();
-            if (this.check('closeBrace')) {
-                this.advance();
-                return;
-            }
-            if (this.atEnd()) {
-                this.error(2002, "this '{' never reaches its '}'", open);
-                return;
-            }
-            const before = this.index;
-            if (this.looksLikeProperty()) {
-                const stmt = this.parseProperty();
-                if (stmt && out) {
-                    out.push(stmt);
+        if (this.isTooDeep(open)) {
+            this.skipBalancedBlockBody();
+            return;
+        }
+        this.nestingDepth++;
+        try {
+            for (;;) {
+                this.skipSeparators();
+                if (this.check('closeBrace')) {
+                    this.advance();
+                    return;
                 }
-            } else {
-                this.skipToStatementBoundary();
+                if (this.atEnd()) {
+                    this.error(2002, "this '{' never reaches its '}'", open);
+                    return;
+                }
+                const before = this.index;
+                if (this.looksLikeProperty()) {
+                    const stmt = this.parseProperty();
+                    if (stmt && out) {
+                        out.push(stmt);
+                    }
+                } else {
+                    this.skipToStatementBoundary();
+                }
+                if (this.index === before) {
+                    this.advance();
+                }
             }
-            if (this.index === before) {
-                this.advance();
-            }
+        } finally {
+            this.nestingDepth--;
         }
     }
 
@@ -967,9 +1034,11 @@ class Parser {
             if (!node.wasId) {
                 continue;
             }
-            // DUI3010/3011/3012 exist in the compiler's code table with exactly these meanings but
-            // have no raise site there yet -- warnings here, never errors, until the compiler
-            // speaks for itself.
+            // DUI3010/3011/3012, and the compiler DOES raise them now (as errors, one per node,
+            // failing the compile and refusing the whole file's migration). Kept as warnings here
+            // anyway: this mirror answers on every keystroke and the compiler answers on compile,
+            // its message names both nodes and both fixes, and both now reach the Problems panel.
+            // A yellow hint ahead of a red verdict reads correctly; two reds for one fact do not.
             const anchor = this.idAnchor(node);
             if (foldName(node.wasId) === foldName(node.id)) {
                 this.warning(3012, `'(was: ${node.wasId})' names the node itself -- nothing to migrate`, anchor);

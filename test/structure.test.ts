@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { buildStructure, scopeAt } from '../src/core/structure';
+import { buildStructure, scopeAt, MAX_NESTING_DEPTH } from '../src/core/structure';
 
 function structural(source: string): { code: number; severity: string; line: number; message: string }[] {
     return buildStructure(source).diagnostics
@@ -175,7 +175,58 @@ test('DUI3008: shadowing an enclosing loop variable is a warning, case sensitive
         'Widget Root {\n    for Row in GetRows() {\n        for row in GetCells() {\n            Text A {}\n        }\n    }\n}\n'), []);
 });
 
-// ---- DUI3010/3011/3012 rename clauses (warnings: the compiler defines but never raises them) ----
+// ---- DUI2013 nesting too deep ------------------------------------------------------------------
+
+/** A chain of `Widget N0 { Widget N1 { ... } }`, `depth` bodies deep, one root included. */
+function nested(depth: number): string {
+    let source = '';
+    for (let level = 0; level < depth; level++) {
+        source += `Widget N${level} {\n`;
+    }
+    for (let level = 0; level < depth; level++) {
+        source += '}\n';
+    }
+    return source;
+}
+
+test('DUI2013: the limit is exactly the compiler\'s -- 256 bodies pass, 257 do not', () => {
+    assert.deepEqual(codes(nested(MAX_NESTING_DEPTH)), []);
+    assert.deepEqual(codes(nested(MAX_NESTING_DEPTH + 1)), [2013]);
+});
+
+test('DUI2013: said once per file, however many levels reach the limit', () => {
+    const result = structural(nested(MAX_NESTING_DEPTH + 40));
+    assert.deepEqual(result.map((d) => ({ code: d.code, severity: d.severity })),
+        [{ code: 2013, severity: 'error' }]);
+    assert.match(result[0].message, /nests more than 256 levels deep/);
+    // Reported at the '{' that broke the budget, not at the end of the file.
+    assert.equal(result[0].line, MAX_NESTING_DEPTH + 1);
+});
+
+test('DUI2013: the over-deep block is skipped balanced, so the file after it still parses', () => {
+    const built = buildStructure(`${nested(MAX_NESTING_DEPTH + 1)}Widget Second {}\n`);
+    assert.deepEqual(built.diagnostics.map((d) => d.code), [2013, 2006]);
+    // Two roots is DUI2006's business; the point here is that the second one was SEEN.
+    assert.equal(built.roots.length, 2);
+    assert.equal(built.roots[1].id, 'Second');
+});
+
+test('DUI2013: a component body spends the same budget -- one counter, one stack', () => {
+    // 256 node bodies is legal, so the '+ Overlay {' inside the innermost is the 257th descent.
+    let opens = '';
+    for (let level = 0; level < MAX_NESTING_DEPTH; level++) {
+        opens += `Widget N${level} {\n`;
+    }
+    const closes = '}\n'.repeat(MAX_NESTING_DEPTH);
+    const seen = codes(`${opens}+ Overlay {\n    Padding = 4\n}\n${closes}`);
+    assert.deepEqual(seen, [2013]);
+});
+
+// ---- DUI3010/3011/3012 rename clauses ----------------------------------------------------------
+//
+// Warnings here and errors in the compiler, deliberately: this layer answers on every keystroke,
+// the compiler answers on compile with a message that names both nodes, and since these left
+// MAILBOX_SUPPRESSED both now reach the Problems panel. See core/mailbox.ts.
 
 test('DUI3012: a was clause naming the node itself', () => {
     const result = structural('Widget Root (was: Root) {}\n');

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.1 — 2026-09-04
+
+Five codes the compiler grew today, and the end of a filter that had outlived its reason.
+
+- **DUI1006 `IdentifierTooLong`**, raised here too. A name of NAME_SIZE (1024) characters or more
+  is not a taste refusal: every word a .dui writes down becomes an FName downstream, and FName
+  answers an over-long string with `checkf(false)`, taking the editor with it. Lexical, so one
+  rule covers every position a word can appear in; the token is emitted **truncated** exactly as
+  the compiler emits it, so the rest of the file goes on lexing.
+- **DUI2013 `NestingTooDeep`**, raised here too. Both parsers are recursive descent, and a file
+  nesting a thousand deep is answered by exhausting the stack — in the compiler that is the editor
+  vanishing with unsaved work, here it is the extension host taking every open file with it. 256
+  bodies, counted once for nodes and component blocks alike (the stack is one stack), reported once
+  per file at the `{` that broke the budget, and the block is skipped **balanced** so the file
+  after it still parses.
+- **DUI5014 `LoopBodyBindingUnsupported`**, **DUI6004 `EventHandlerNotFound`** and **DUI6005
+  `EventHandlerSignatureMismatch`** explained in Chinese. All three are compiler-only — 5014 needs
+  the thunk pass, and the 6xxx pair needs the class the compile is still building — so they are
+  registered and never raised locally, and arrive through the diagnostics mailbox like the rest.
+- **DUI3009 `ParentRefusedChild`** explained too: it could always arrive from the compiler and had
+  no entry, so it read as a bare number. A completeness test now holds the table over every code
+  either side can raise, which is what caught it.
+- **DUI3010/3011/3012 stop being swallowed.** They had no raise site anywhere in the plugin when
+  the mailbox filter was written; the compiler now raises them as **errors** that fail the compile
+  and refuse the whole file's rename migration. They leave the suppression set so the compiler's
+  verdict — whose message names both nodes and both ways out — reaches Problems. The local checks
+  stay **warnings**: a live hint ahead of a compile, never a second red for one fact.
+- The filter is now its own set (`MAILBOX_SUPPRESSED`) rather than a synonym for "we raise this
+  locally". Membership means *the mirror judges from the same inputs the compiler does* — which
+  DUI1006 (unsaved buffer vs. the file on disk) and DUI2013 (blocks only, where the compiler also
+  spends the budget on parenthesised sub-expressions) do not, so both stay outside it and arrive
+  from the compiler as well. A test holds the suppression set to a strict subset of what is raised.
+
+
 ## 0.6.0 — 2026-09-01
 
 The scoped-tag release, and the end of three import false positives.
