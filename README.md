@@ -54,6 +54,21 @@ Language support for DreamGUI `.dui` widget hierarchies.
   designer and selects the node under the cursor; **Compile This File** compiles now, verdicts in
   Problems. The Unreal designer is this language's preview surface — the bridge just takes you
   there.
+- **Inside binding expressions**, the editor's knowledge reaches the cursor: signature help on
+  every call (`(` and `,`), hover on a function or variable with its type, `<->` completion
+  listing the class's variables (FieldNotify ones first — the rest are polled every frame), and
+  `Item.` completion inside an `each` body from the source's element type.
+- **Format Document** (and the `[dui]` default formatter): indentation from block depth, one
+  space around `=` and the arrows, `}` on its own line, blank lines folded to one — the same
+  spelling the designer's write-back prints, so the two never fight. A guard re-lexes the result
+  and refuses any formatting that would change a single token.
+- **Add `use`**: a style or resource that lives in exactly one other file of the workspace gets a
+  quickfix that inserts the import, spelled the way the file already spells its imports.
+- **Package paths are links**: `/Game/...` in a tag or a string opens the asset in the running
+  editor's Content Browser (a tag that names another .dui keeps its F12 to that file instead).
+- **Reveal in VS Code** from the Unreal designer's toolbar or hierarchy context menu jumps here to
+  the node's line; a single `.dui` opened on its own is indexed with the rest of its `DUI/` tree,
+  so imports resolve without a folder open.
 
 ## Where the smarts come from
 

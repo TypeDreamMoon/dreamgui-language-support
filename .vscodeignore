@@ -10,3 +10,6 @@ tsconfig.json
 esbuild.js
 install-vscode-extension.ps1
 **/*.map
+test-electron/**
+out/test-electron/**
+.vscode-test/**

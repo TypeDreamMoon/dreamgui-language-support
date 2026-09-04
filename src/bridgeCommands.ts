@@ -1,8 +1,10 @@
 /**
- * The two commands that treat the Unreal editor as this language's preview surface: reveal (open
- * the designer on this class, selecting the node under the cursor) and compile-now (verdicts
- * arrive through the diagnostics mailbox, so the Problems panel is the answer). Slint previews in
- * a widget; .dui previews in the real designer -- the bridge just takes you there.
+ * The commands that treat the Unreal editor as this language's preview surface: reveal (open the
+ * designer on this class, selecting the node under the cursor), compile-now (verdicts arrive
+ * through the diagnostics mailbox, so the Problems panel is the answer), and reveal-asset (sync
+ * the content browser to a package path, which is what the document links in documentLinks.ts
+ * are pointed at). Slint previews in a widget; .dui previews in the real designer -- the bridge
+ * just takes you there.
  */
 import * as vscode from 'vscode';
 import { BridgeClient } from './bridge';
@@ -61,6 +63,26 @@ export function registerBridgeCommands(context: vscode.ExtensionContext, bridge:
                 void vscode.window.showErrorMessage(`DreamUI: ${response.message}`);
             } else if (response.message.includes('no widget named')) {
                 void vscode.window.showInformationMessage(`DreamUI: ${response.message}`);
+            }
+        }));
+
+    // Not a text-editor command: it is invoked from a document link, and the argument is the
+    // path the link carried. The document only supplies the project to ask -- which .dui is in
+    // front decides which editor holds the asset registry.
+    context.subscriptions.push(vscode.commands.registerCommand('dreamui.revealAsset',
+        async (assetPath?: string) => {
+            if (typeof assetPath !== 'string' || assetPath.length === 0) {
+                return;
+            }
+            const documentPath = vscode.window.activeTextEditor?.document.uri.fsPath;
+            if (!documentPath || !requireEditorSide(documentPath)) {
+                return;
+            }
+            const response = await bridge.send(documentPath, 'revealAsset', { assetPath }, 15000);
+            if (!response) {
+                void vscode.window.showErrorMessage('DreamUI: the editor did not answer in time.');
+            } else if (!response.ok) {
+                void vscode.window.showErrorMessage(`DreamUI: ${response.message}`);
             }
         }));
 

@@ -2,7 +2,7 @@
   "name": "dreamui-language-support",
   "displayName": "DreamUI Language Support",
   "description": "Language support for DreamGUI .dui widget hierarchies: completion, hover, outline, diagnostics, driven by symbols the Unreal plugin exports.",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
@@ -132,6 +132,23 @@
           "description": "Explicit path to .dui-symbols.json. Empty = search each workspace folder's DUI/ directory and the folders above the open file."
         }
       }
+    },
+    "keybindings": [
+      {
+        "command": "dreamui.revealInDesigner",
+        "key": "ctrl+alt+r",
+        "when": "editorLangId == dui"
+      },
+      {
+        "command": "dreamui.compileFile",
+        "key": "ctrl+alt+b",
+        "when": "editorLangId == dui"
+      }
+    ],
+    "configurationDefaults": {
+      "[dui]": {
+        "editor.defaultFormatter": "typedreammoon.dreamui-language-support"
+      }
     }
   },
   "scripts": {
@@ -141,12 +158,19 @@
     "build": "npm run compile && node esbuild.js --production",
     "pretest": "npm run compile",
     "test": "node --test \"out/test/**/*.test.js\"",
+    "compile:electron": "tsc -p ./test-electron",
+    "pretest:electron": "npm run compile && npm run bundle && npm run compile:electron",
+    "test:electron": "node ./out/test-electron/runTest.js",
     "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.20.0",
+    "glob": "^10.4.5",
+    "mocha": "^10.8.2",
     "typescript": "^5.4.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.0.0"

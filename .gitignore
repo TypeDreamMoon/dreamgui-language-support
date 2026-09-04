@@ -3,3 +3,4 @@ out/
 .npm-cache/
 *.vsix
 *.map
+.vscode-test/

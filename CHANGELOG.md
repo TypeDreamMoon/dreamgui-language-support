@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.7.0 — 2026-09-04
+
+The index reads a file's own tree, a formatter, and the editor's knowledge reaching into binding
+expressions.
+
+- **A `.dui` opened on its own is indexed with its siblings.** `findFiles` sees nothing in a window
+  without a folder, and that is how this language is most often read — double-clicked, or revealed
+  from Unreal. The host now walks up from the file to its `DUI/` root (or a directory carrying
+  `.dui-symbols.json` / `DreamUI.code-workspace` / `.dui-diagnostics.json`), reads that tree itself
+  and watches it, so `use` resolves and imported styles stop reporting DUI3004 in single-file mode.
+- **Format Document**, plus `[dui]` default formatter. Indentation from block depth, single spaces
+  around `=` and the arrows, `}` on its own line, blank lines folded to one, comments and strings
+  untouched — the spelling the designer's write-back prints. The result is re-lexed and compared
+  token by token; a formatting that would change one is refused. Range formatting formats the file
+  and returns the minimal edit.
+- **The judging moved into core.** Everything diagnostics.ts decided — import exemptions, the
+  declaration-library case, the stray `}`, DUI4007, the unknown-tag hint — is `judgeDocument` in
+  `src/core/diagnose.ts`, with tests, and the corpus sweep now builds an index first: the real
+  gallery is diagnostic-free (the old sweep, index-less, reported 17). An `@vscode/test-electron`
+  smoke (`npm run test:electron`) opens the corpus with and without a folder and asserts zero
+  DUI3004.
+- **Add `use`.** DUI3004 and DUI4007 offer to insert the import when exactly one other file
+  declares the style or resource, spelled the way the file's existing imports are spelled, after the
+  last `use`.
+- **Inside binding expressions**: signature help on calls, hover on functions and variables, `<->`
+  completion listing variables (FieldNotify first — the compiler accepts any variable, FieldNotify
+  only decides subscription versus polling), `Item.` members in an `each` body. All from three new
+  bridge actions (`callable` in `functions`, `variables`, `members`); the editor's type strings now
+  carry template arguments, so a `TArray<FFoo>` return can be asked about.
+- **Package paths are links** to the asset in the editor's Content Browser (`revealAsset`); a tag
+  that names another .dui keeps its definition jump.
+- **Reveal in VS Code** from the designer: the editor writes `Saved/DreamGUI/Bridge/reveal-to-
+  editor.json`, the extension opens the file at the node's line. Stamps older than 30 s are ignored
+  at startup; a one-second poll backs the watcher for `Saved/` trees outside the workspace.
+- **Keybindings**: Ctrl+Alt+R reveals in the designer, Ctrl+Alt+B compiles the file.
+- **Plugin side (needs a rebuild of DreamGUI)**: the bridge actions above, DUI5004/6004/6005 now
+  carry the line of the `<-`/`->` that raised them, the `each` failures that only ever reached the
+  message log are raised as **DUI6006 `EachSourceNotFound`** and **DUI6007
+  `EachSourceNotObjectArray`** (explained here, anchored on the `each` line), and the designer
+  gains its Reveal in VS Code entries.
+
 ## 0.6.1 — 2026-09-04
 
 Five codes the compiler grew today, the end of a filter that had outlived its reason, and the

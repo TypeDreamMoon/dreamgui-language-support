@@ -22,6 +22,10 @@ import { registerMailbox } from './mailboxWatcher';
 import { registerBridge } from './bridge';
 import { registerBridgeCompletion } from './bridgeCompletion';
 import { registerBridgeCommands } from './bridgeCommands';
+import { registerFormatting } from './formatting';
+import { registerBindingIntel } from './bindingIntel';
+import { registerDocumentLinks } from './documentLinks';
+import { registerRevealWatcher } from './revealWatcher';
 
 export function activate(context: vscode.ExtensionContext): void {
     const store = new SymbolStore();
@@ -42,10 +46,11 @@ export function activate(context: vscode.ExtensionContext): void {
     registerColors(context);
     registerSemanticTokens(context);
     registerEditing(context);
+    registerFormatting(context);
     registerNewFile(context);
     const mailbox = registerMailbox(context);
     registerStatusBar(context, store, mailbox);
-    registerQuickfixes(context);
+    registerQuickfixes(context, workspaceHost);
     registerExplain(context);
     registerNavigation(context, workspaceHost);
     registerRename(context);
@@ -53,6 +58,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const bridge = registerBridge(context);
     const bridgeCache = registerBridgeCompletion(context, bridge, workspaceHost);
     registerBridgeCommands(context, bridge);
+    // After completion: signature help, hover and `Item.` members share its per-class caches.
+    registerBindingIntel(context, bridge, bridgeCache, workspaceHost);
+    registerDocumentLinks(context, workspaceHost);
+    registerRevealWatcher(context, bridge);
     context.subscriptions.push(vscode.commands.registerCommand('dreamui.clearBridgeCache', () => {
         bridgeCache.clear();
         vscode.window.showInformationMessage('DreamUI: bridge caches cleared.');
