@@ -12,22 +12,29 @@ export class WorkspaceIndexHost implements vscode.Disposable {
     readonly index = new WorkspaceIndex();
     private scanned: Promise<void> | undefined;
     private readonly disposables: vscode.Disposable[] = [];
+    private readonly changed = new vscode.EventEmitter<string>();
+    /**
+     * Fires with the path of every file the index just took in or dropped. Anything that judged a
+     * file against the index (the import exemptions in diagnostics, above all) is stale the moment
+     * a library it imports arrives, changes or leaves, and this is how it finds out.
+     */
+    readonly onDidChange = this.changed.event;
 
     constructor() {
         const watcher = vscode.workspace.createFileSystemWatcher('**/*.dui');
         this.disposables.push(watcher);
         this.disposables.push(watcher.onDidCreate((uri) => void this.updateFromDisk(uri)));
         this.disposables.push(watcher.onDidChange((uri) => void this.updateFromDisk(uri)));
-        this.disposables.push(watcher.onDidDelete((uri) => this.index.remove(uri.fsPath)));
+        this.disposables.push(watcher.onDidDelete((uri) => this.drop(uri.fsPath)));
 
         this.disposables.push(vscode.workspace.onDidOpenTextDocument((document) => {
             if (document.languageId === 'dui' && document.uri.scheme === 'file') {
-                this.index.update(document.uri.fsPath, document.getText());
+                this.apply(document.uri.fsPath, document.getText());
             }
         }));
         this.disposables.push(vscode.workspace.onDidChangeTextDocument((event) => {
             if (event.document.languageId === 'dui' && event.document.uri.scheme === 'file') {
-                this.index.update(event.document.uri.fsPath, event.document.getText());
+                this.apply(event.document.uri.fsPath, event.document.getText());
             }
         }));
     }
@@ -39,7 +46,7 @@ export class WorkspaceIndexHost implements vscode.Disposable {
             await Promise.all(files.map((uri) => this.updateFromDisk(uri)));
             for (const document of vscode.workspace.textDocuments) {
                 if (document.languageId === 'dui' && document.uri.scheme === 'file') {
-                    this.index.update(document.uri.fsPath, document.getText());
+                    this.apply(document.uri.fsPath, document.getText());
                 }
             }
         })();
@@ -50,21 +57,33 @@ export class WorkspaceIndexHost implements vscode.Disposable {
         const open = vscode.workspace.textDocuments.find(
             (document) => document.uri.toString() === uri.toString());
         if (open) {
-            this.index.update(uri.fsPath, open.getText());
+            this.apply(uri.fsPath, open.getText());
             return;
         }
         try {
             const bytes = await vscode.workspace.fs.readFile(uri);
-            this.index.update(uri.fsPath, Buffer.from(bytes).toString('utf8'));
+            this.apply(uri.fsPath, Buffer.from(bytes).toString('utf8'));
         } catch {
-            this.index.remove(uri.fsPath);
+            this.drop(uri.fsPath);
         }
+    }
+
+    /** The one door into the index, so every change -- sweep, watcher, edit -- is announced. */
+    private apply(file: string, text: string): void {
+        this.index.update(file, text);
+        this.changed.fire(file);
+    }
+
+    private drop(file: string): void {
+        this.index.remove(file);
+        this.changed.fire(file);
     }
 
     dispose(): void {
         for (const disposable of this.disposables) {
             disposable.dispose();
         }
+        this.changed.dispose();
     }
 }
 

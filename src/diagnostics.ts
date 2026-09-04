@@ -13,17 +13,31 @@ import { SymbolStore } from './symbols';
 import { buildModel, OutlineNode } from './docmodel';
 import { DuiDiagnostic } from './core/structure';
 import { formatCode } from './core/scanner';
-import { WorkspaceIndex } from './core/workspaceIndex';
+import { WorkspaceIndexHost } from './workspace';
 
 export function registerDiagnostics(context: vscode.ExtensionContext, store: SymbolStore,
-    index?: WorkspaceIndex): void {
+    host?: WorkspaceIndexHost): void {
     const collection = vscode.languages.createDiagnosticCollection('dui');
     context.subscriptions.push(collection);
 
-    const refresh = (document: vscode.TextDocument) => {
+    const refresh = async (document: vscode.TextDocument): Promise<void> => {
         if (document.languageId !== 'dui') {
             return;
         }
+        // The import exemptions below read the workspace index, and the index is filled by a lazy
+        // sweep that only navigation and completion used to ask for. Judging a file before that
+        // sweep is what reported DUI3004 on every imported style in a freshly restored window: the
+        // `use` resolved to nothing, so nothing was exempt -- and nothing re-judged the file once
+        // the library it names was indexed. Wait for the sweep; a document that changed underneath
+        // the wait belongs to the refresh that change triggered.
+        if (host) {
+            const version = document.version;
+            await host.ensureScanned();
+            if (document.isClosed || document.version !== version) {
+                return;
+            }
+        }
+        const index = host?.index;
         store.ensureLoadedFor(document.uri.fsPath);
         const model = buildModel(document);
         const diagnostics: vscode.Diagnostic[] = [];
@@ -142,15 +156,30 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
         collection.set(document.uri, diagnostics);
     };
 
-    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(refresh));
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => refresh(event.document)));
-    context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((document) => collection.delete(document.uri)));
-    context.subscriptions.push(store.onDidChange(() => {
+    const refreshVisible = (): void => {
         for (const editor of vscode.window.visibleTextEditors) {
-            refresh(editor.document);
+            void refresh(editor.document);
         }
-    }));
-    for (const editor of vscode.window.visibleTextEditors) {
-        refresh(editor.document);
+    };
+
+    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((document) => void refresh(document)));
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => void refresh(event.document)));
+    context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((document) => collection.delete(document.uri)));
+    context.subscriptions.push(store.onDidChange(refreshVisible));
+    if (host) {
+        // A library arrived, changed or left: any visible file may import it. Coalesced, because the
+        // sweep announces one file at a time and every keystroke announces the file being typed in.
+        let pending: ReturnType<typeof setTimeout> | undefined;
+        context.subscriptions.push(host.onDidChange(() => {
+            if (pending !== undefined) {
+                clearTimeout(pending);
+            }
+            pending = setTimeout(() => {
+                pending = undefined;
+                refreshVisible();
+            }, 100);
+        }));
+        context.subscriptions.push({ dispose: () => { if (pending !== undefined) { clearTimeout(pending); } } });
     }
+    refreshVisible();
 }

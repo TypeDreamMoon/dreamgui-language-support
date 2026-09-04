@@ -2,8 +2,17 @@
 
 ## 0.6.1 — 2026-09-04
 
-Five codes the compiler grew today, and the end of a filter that had outlived its reason.
+Five codes the compiler grew today, the end of a filter that had outlived its reason, and the
+import exemptions finally working in a restored window.
 
+- **Imported styles and resources are exempt at startup too.** 0.6.0 taught the diagnostics to
+  withhold DUI3004 and DUI4007 for what a `use` brings in, but it read the workspace index without
+  ever asking for the sweep that fills it — only Go to Definition and completion did — and nothing
+  re-judged a file once the library it imports had been indexed. So a restored window reported
+  every imported style in every open file (`'Heading' names a style this file does not declare`,
+  twelve times over in the gallery) and kept reporting it until that file was edited. Diagnostics
+  now wait for the sweep before judging, and re-run the visible editors whenever the index takes a
+  file in, changes one or drops one.
 - **DUI1006 `IdentifierTooLong`**, raised here too. A name of NAME_SIZE (1024) characters or more
   is not a taste refusal: every word a .dui writes down becomes an FName downstream, and FName
   answers an over-long string with `checkf(false)`, taking the editor with it. Lexical, so one
