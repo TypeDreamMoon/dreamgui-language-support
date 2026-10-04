@@ -105,8 +105,12 @@ export function registerRefactors(context: vscode.ExtensionContext): void {
                 actions.push(action);
             }
 
+            // Only a style this file declares can be inlined: one a `use` brought in (or `: ns.Label`) lives in
+            // another file, and offering the action only to refuse it is a lightbulb that lies.
             const worn = wornStyleAt(model.structure, offset);
-            if (worn) {
+            const declaredHere = worn !== undefined && model.structure.styles.some(
+                (style) => style.name.toLowerCase() === worn.styleName!.toLowerCase());
+            if (worn && declaredHere) {
                 const action = new vscode.CodeAction(
                     `内联样式 '${worn.styleName}'`, vscode.CodeActionKind.RefactorInline);
                 action.command = {

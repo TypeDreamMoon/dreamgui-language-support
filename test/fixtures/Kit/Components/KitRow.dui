@@ -1,0 +1,44 @@
+// One row of the kit: a label, a value between two arrows, and Changed raised when an arrow is pressed. What a host
+// sets is declared here, and the texts are bound to it.
+class /Game/UI/Kit/WBP_KitRow
+use "Kit/KitLibrary.dui"
+
+props {
+    Text   Label
+    Text   Value
+    Number Index = 0
+    Enum   /Script/KitGame.EKitRowKind Kind = Cycle
+}
+events {
+    Changed(Number Index, Number Step); Closed
+}
+
+Widget Root : RowBox {
+    + HorizontalBox { Padding = (16, 0, 16, 0)  Spacing = 12 }
+    + UIButton { TransitionType = None }
+
+    Text LabelText : Caption {
+        Text <- Label
+        @fill 2
+    }
+    Native.Button Previous {
+        OnClicked -> emit Changed(Index, -1)
+        Text { Text = "<" }
+    }
+    Text : Caption {
+        Text <- Value
+        @slot { MinDesiredSize = (220, 0)  MaxDesiredSize = (220, 0) }
+    }
+    Native.Button Next {
+        OnClicked -> emit Changed(Index, 1)
+        Text { Text = ">" }
+    }
+    if IsLocked() {
+        Image Locked { }
+    } else if !IsEditable() {
+        Text ReadOnly : Caption { Text = "read only" }
+    }
+    else {
+        Text : Caption { Shown <- HasHint()  Text = "?" }
+    }
+}

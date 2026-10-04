@@ -5,39 +5,23 @@
  * it offers comes from this file, which the plugin regenerates from the compiler's own tables on
  * editor startup -- so what completion offers is exactly what the compiler accepts. No file means
  * degraded mode: grammar and structure features keep working, symbol-driven ones quietly wait.
+ *
+ * One exception, and a bounded one: a dump an OLDER plugin wrote lacks the tables the component
+ * grammar added (keywords, prop types, container node types, `Shown`). Those are supplied from the
+ * language reference by core/symbolFacts until the editor rewrites the file -- never in place of
+ * what a dump does say.
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+    PropertyInfo, ClassInfo, SymbolData, TagKind, normalizeSymbols, nodeTypeNames, isContainerType,
+    propertiesForTag as corePropertiesForTag,
+} from './core/symbolFacts';
 
-export interface PropertyInfo {
-    name: string;
-    type: string;
-    enum?: string;
-    literal?: string;
-    /** The UPROPERTY tooltip, as the details panel shows it. */
-    tooltip?: string;
-    /** The class default, spelled the way this language reads it back. */
-    default?: string;
-}
-
-export interface ClassInfo {
-    class?: string;
-    tooltip?: string;
-    properties?: PropertyInfo[];
-    events?: string[];
-}
-
-export interface SymbolData {
-    version: number;
-    tags: Record<string, ClassInfo>;
-    widgetProperties: PropertyInfo[];
-    widgetEvents: string[];
-    slotProperties: PropertyInfo[];
-    components: Record<string, ClassInfo>;
-    enums: Record<string, { values: string[] }>;
-    resourceTypes: string[];
-}
+// The dump's shape and what it means live in core, where an old dump and a new one are tested side by side; these
+// names are re-exported so every provider keeps importing them from here.
+export type { PropertyInfo, ClassInfo, SymbolData, TagKind } from './core/symbolFacts';
 
 const SYMBOLS_FILE = '.dui-symbols.json';
 
@@ -118,8 +102,9 @@ export class SymbolStore {
 
     private loadFile(filePath: string): void {
         try {
-            const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as SymbolData;
-            this.data = parsed;
+            // Normalized on the way in: an older plugin's dump has no keywords, no container entries and no `Shown`,
+            // and every lookup below is written against the shape the current plugin writes.
+            this.data = normalizeSymbols(JSON.parse(fs.readFileSync(filePath, 'utf8')));
             this.loadedFrom = filePath;
             this.watch(filePath);
             this.changed.fire();
@@ -145,17 +130,21 @@ export class SymbolStore {
 
     // ---- lookups the providers share -----------------------------------------------------------
 
-    /** Properties addressable by a bare name on a node of this tag: the tag's visual + the widget. */
+    /**
+     * Properties addressable by a bare name on a node of this tag: the widget's, then the tag's visual's -- or, for a
+     * container-typed node (`VerticalBox Column`), its container's. See core/symbolFacts for the order.
+     */
     propertiesForTag(tag: string | undefined): PropertyInfo[] {
-        if (!this.data) {
-            return [];
-        }
-        const out: PropertyInfo[] = [];
-        if (tag && this.data.tags[tag]?.properties) {
-            out.push(...this.data.tags[tag].properties!);
-        }
-        out.push(...(this.data.widgetProperties ?? []));
-        return out;
+        return corePropertiesForTag(this.data, tag);
+    }
+
+    /** Every node type the dump knows -- visuals, registered widgets, containers -- with its kind. */
+    nodeTypes(): { name: string; kind: TagKind }[] {
+        return nodeTypeNames(this.data);
+    }
+
+    isContainer(tag: string): boolean {
+        return isContainerType(this.data, tag);
     }
 
     /**

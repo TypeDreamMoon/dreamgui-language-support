@@ -43,15 +43,17 @@ export interface Mailbox {
 
 /**
  * Every code the extension's own layers can raise, live on every keystroke. The scanner's lexical
- * ones, the structure layer's, and the resource-reference check in src/diagnostics.ts.
+ * ones, the structure layer's (core/structure.ts), and the index-aware judge's (core/diagnose.ts:
+ * DUI4007 for a missing resource, DUI3018 for an alias a built-in answers to, and the namespaced
+ * DUI3004 / DUI3021 it settles once every import was followed).
  *
  * Kept as one list because it is what the code table is held complete over: a code this extension
  * puts on the screen with no entry to open is a number and nothing else.
  */
 export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
     1001, 1002, 1003, 1004, 1005, 1006,
-    2002, 2003, 2004, 2006, 2013,
-    3001, 3002, 3004, 3005, 3008, 3010, 3011, 3012, 3014, 3015,
+    2002, 2003, 2004, 2006, 2013, 2015, 2016, 2017, 2018, 2019,
+    3001, 3002, 3004, 3005, 3008, 3010, 3011, 3012, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3022,
     4007,
 ]);
 
@@ -71,12 +73,22 @@ export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
  *     so the two can be about different words in the same file;
  *   - DUI3010/3011/3012, which had no raise site in the compiler at all when this set was written
  *     and now arrive as errors that fail the compile. The compiler's message names both nodes and
- *     both ways out, and is worth having beside the mirror's warning.
+ *     both ways out, and is worth having beside the mirror's warning;
+ *   - DUI3018, which the mirror can only say for a class-path alias, or a file the index resolves,
+ *     spelt exactly as the symbols dump spells the tag -- the compiler compares FNames and needs no
+ *     index;
+ *   - DUI3021, which the mirror settles alone only for a file with no plain `use`, and otherwise
+ *     only once every import resolved in the index -- the compiler resolves them against its DUI
+ *     roots and always knows.
+ *
+ * The parse-level codes the `use … as` / props / events / if / slot grammar added (2015-2019, 3016,
+ * 3017, 3019, 3020, 3022) ARE in it: each is one file's characters, the mirror consumes every one of
+ * those productions token for token as FParser does, and says each refusal the compiler says there.
  */
 export const MAILBOX_SUPPRESSED: ReadonlySet<number> = new Set([
     1001, 1002, 1003, 1004, 1005,
-    2002, 2003, 2004, 2006,
-    3001, 3002, 3004, 3005, 3008, 3014, 3015,
+    2002, 2003, 2004, 2006, 2015, 2016, 2017, 2018, 2019,
+    3001, 3002, 3004, 3005, 3008, 3014, 3015, 3016, 3017, 3019, 3020, 3022,
     4007,
 ]);
 
@@ -131,5 +143,22 @@ export function parseMailbox(json: string): Mailbox | undefined {
 
 /** What the Problems panel should show from an entry: the compiler's codes minus the suppressed. */
 export function mailboxDiagnosticsToShow(entry: MailboxFileEntry): MailboxDiagnostic[] {
-    return entry.diagnostics.filter((diagnostic) => !MAILBOX_SUPPRESSED.has(diagnostic.code));
+    return entry.diagnostics.filter((diagnostic) =>
+        !MAILBOX_SUPPRESSED.has(diagnostic.code) || namesAQualifiedName(diagnostic));
+}
+
+/**
+ * DUI3004 and DUI4007 about a NAMESPACED name (`'nier.Lable' names a style …`, `'@nier.Inc' names no entry …`).
+ *
+ * Those two codes are suppressed because the live layer says them at least as often as the compiler for a plain
+ * name. For a namespaced one it does not: the library behind the namespace is another file, and the judge only says
+ * it is missing once the index has followed every import. That is the case MAILBOX_SUPPRESSED's own rule keeps out
+ * -- a weaker local check -- so the compiler's copy is let through, told apart by the dot in the name it quotes.
+ */
+function namesAQualifiedName(diagnostic: MailboxDiagnostic): boolean {
+    if (diagnostic.code !== 3004 && diagnostic.code !== 4007) {
+        return false;
+    }
+    const quoted = /'@?([^']*)'/.exec(diagnostic.message);
+    return quoted !== null && quoted[1].includes('.');
 }

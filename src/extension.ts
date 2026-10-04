@@ -40,11 +40,12 @@ export function activate(context: vscode.ExtensionContext): void {
             : 'DreamUI: no .dui-symbols.json found. Open the Unreal editor once (or run DreamUI.ExportSymbols in its console) with a DUI/ directory in the project.');
     }));
 
-    registerFeatures(context, store);
+    // The index first: completion, hover and semantic tokens read what a file borrows through its `use` lines.
     const workspaceHost = registerWorkspaceIndex(context);
+    registerFeatures(context, store, workspaceHost);
     registerDiagnostics(context, store, workspaceHost);
     registerColors(context);
-    registerSemanticTokens(context);
+    registerSemanticTokens(context, workspaceHost);
     registerEditing(context);
     registerFormatting(context);
     registerNewFile(context);

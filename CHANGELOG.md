@@ -1,5 +1,95 @@
 # Changelog
 
+## 0.8.0 — 2026-10-04
+
+The component syntax: what DreamGUI's `.dui` gained after 2.1.0 — `use … as`, `props`, `events`,
+`emit`, slots with a layout and a default, containers as node types, nodes with no id, `@slot { … }`
+and `@fill`, namespaces, `if` / `else` and a working `for` — highlighted, explained and written by
+snippet. Every old spelling keeps working, and keeps its colour.
+
+- **The grammar learns the new forms.** `use "Row.dui" as Row`, `use /Game/UI/WBP_Row as Row` and
+  `use "Lib.dui" as nier` colour `as` and the name; `props { … }` and `events { … }` are regions of
+  their own, with the compiler's type words (`Text`, `String`, `Number`, `Integer`, `Bool`, `Color`,
+  `Vector2`, `Asset`, `Class`, `Enum <path>`) — any other word stays uncoloured, so a typo shows
+  before the compile says DUI6008 — and a one-line `events { Picked(Number Index); Closed }` reads
+  whole. `emit` is a keyword only with an event after it: `OnReleased -> emit` still names a handler,
+  as the parser reads it. `slot Rows default : RowList` takes its clauses in any order. `if`, `else if`
+  and `else` lead a branch, and `if = 1` is still a property. `@fill` and `@fill 2` are the shorthand,
+  `@fill Filler { }` the resource-typed node it is. `@slot { A = 1  B = 2 }` scopes each line as a slot
+  property.
+- **Node headers** take every type the compiler resolves — a container (`VerticalBox Column`), an alias
+  (`Row`, `nier.Row`), `@Name`, a registry tag (`Native.Button`), a path — and nodes with no id
+  (`HorizontalBox {`, `Text : Caption {`); a type alone on a line stays uncoloured, the DUI2004 it
+  always was. `(was: …)` and `: Style` come in either order. A namespace or registry scope is marked
+  inside the name it qualifies (`nier.Row`, `: nier.Label`, `@nier.Ink`); a class path's module is not.
+- **One-line blocks colour each statement.** A property, binding or route now ends at a `;`, a `}`, or
+  where the next property begins — the parser's own rule — so `+ UIButton { TransitionType = None
+  bCanNavigateHere = false }` and `Label <- Item.Label  Count <- Item.Count` are two properties each
+  rather than one long value, and a child node inside a one-line body (`RectBlock Key : Cap { Text
+  Label : Caption {} }`) is a node. `@key(…)` after a string value is the key override, no longer a
+  resource reference, and `@Resource` colours inside binding expressions and `emit` arguments.
+- **`timeline` blocks get their own region**: `duration` / `loop`, track lines, `ease` names and
+  `@time -> Event` keys, and `timeline X external`. A track line's `:` is never read as an anonymous
+  node's style clause.
+- **The code table covers the compiler's whole table.** New entries for DUI2015–2019 (`use … as`,
+  `props`, `events`, `if`, `slot`), 3017–3022 (duplicate alias, alias shadowing a tag or container,
+  duplicate prop or event, unknown namespace, a second default slot), 5018–5022 (unresolved alias,
+  slot fills, `for` misplaced, a second layout container), 6008–6014 (prop types, names and
+  defaults, `emit`), 7004–7005 (write-back of what no line spells, and of a style's component), and
+  the ones that had arrived from the compiler as bare numbers: 1007, 2014, 3016, 5015–5017.
+  Entries whose meaning moved say what they mean now: **DUI5007** no longer says `for` is
+  unimplemented — it is the warning a caller with nowhere to record a loop gets, which a real
+  compile never is; DUI2004 allows a node with no id before a block or a style; DUI3008 and DUI3009
+  stop describing nested loops as theirs (that is DUI5021 / DUI5012 now); DUI3002, 3003, 3004, 5005,
+  5012, 5014, 6006 and 6007 name what they now cover. The test holds the table to the compiler's
+  numbering, the retired DUI3007 excluded.
+- **Snippets**: `dui-component` (a component with `props`, `events`, `emit` and a default slot),
+  `props`, `events`, `emit`, `use-as`, `use-class`, `for`, `if`, `ifelse`, `slot-default`,
+  `slot-fill`, `slotblock`, `shown`, `vbox`, `hbox`. A test expands every snippet and holds it to
+  lexing clean with its braces balanced.
+- **README**: the section on what the language deliberately does not have was partly false — `if`
+  and `for` exist, and `for` is no longer refused with DUI5007. Rewritten against the plugin's
+  language reference, and given to the Chinese README too.
+- **The structure layer reads the new language the way the compiler does.** It consumes tokens as
+  the parser does, its brace-balanced recovery included: a value is one value (`A = 1  B = 2` is two
+  statements), a `<-` binding ends where the next property starts, and a statement the compiler
+  refuses is not recorded. `use … as` (file, class, namespace), `@Name` and multi-dot types, unnamed
+  nodes with the compiler's made ids (all 66 of the NieR screens' match the compiled assets),
+  `@slot { }` and `@fill [N]`, styles with `+` blocks and slot lines, `props`, `events`, `emit`, slot
+  declarations and fills, `if` / `else` chains and `for` over a function or a variable. It raises
+  DUI2015–2019, 3017, 3019, 3020, 3022 and 3021 where one file proves them, with the compiler's
+  wording, and DUI1006 for a made id that is too long.
+- **The index follows imports as the compiler merges them**: plain uses transitively, namespaces
+  under their prefix, a component use bringing only its name. A file's aliases, props, events and
+  slots are summarized, and `aliasesVisibleFrom` / `resolveComponent` answer what a node type comes
+  to. The judge stops reporting anything the new syntax makes valid -- an alias, namespaced or
+  container type, a namespaced style or resource, a prop read in a binding, `for` -- and adds
+  index-backed checks only where they are certain (an alias shadowing a tag or container, DUI3018;
+  an unknown namespace, DUI3021), as warnings when it is the index rather than the file that knows.
+  The mailbox lets the compiler's DUI3004 / DUI4007 about a namespaced name through, since the live
+  check for those is the weaker one.
+- **The formatter keeps every new construct** and is idempotent on the NieR screens; a block
+  written on one line with no non-empty block inside now stays on one line, instead of every block
+  being expanded.
+- **Completion, hover and go to definition for components.** Node types offer containers, aliases
+  (re-exported ones included) and `ns.` namespaces; `props { }` and event parameters offer the type
+  words; `->` offers `emit`, then this file's events; `@` offers `slot` / `fill`, and `key` after a
+  string; keywords appear only where they are legal; a component instance offers its props, events
+  and slot fills. Hover explains aliases, namespaces, `emit`, props and unnamed nodes' made ids.
+  Go to definition jumps from an alias to its component file, from `emit` to the event, from a
+  binding's prop to its declaration, from `ns.X` to the library and from a fill to the slot.
+  Accepting a dotted property after `AnchorData.` no longer doubles the prefix.
+- **Semantic tokens** gain `namespace` and `property`: aliases colour as types, props as properties,
+  events and `emit` targets as events, and tokens refresh when the workspace index changes.
+- **Rename, refactors, a quickfix**: an unnamed node is renamed by writing its id (no `(was:)`);
+  aliases, namespaces, props and events rename their uses in the file; extract-style handles unnamed
+  nodes and refuses branch and loop bodies; inline-style carries `+` components and slot lines;
+  DUI3003 offers `use "…" as X` for a uniquely named component file. `emit Picked(` gets signature
+  help from the file's own `events` block.
+- **Old symbol dumps are filled in**: a `.dui-symbols.json` from before the plugin's component
+  syntax gets tag kinds, containers as node types, `Shown`, and the keyword, annotation and prop-type
+  lists from a built-in fallback that mirrors the language reference.
+
 ## 0.7.0 — 2026-09-04
 
 The index reads a file's own tree, a formatter, and the editor's knowledge reaching into binding

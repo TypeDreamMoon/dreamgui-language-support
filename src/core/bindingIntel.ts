@@ -22,7 +22,12 @@ const NAME_HEAD = '[A-Za-z_\\u00A0-\\uFFFF]';
 const NAME_TAIL = '[\\w\\u00A0-\\uFFFF]';
 const IDENTIFIER = new RegExp('^' + NAME_HEAD + NAME_TAIL + '*$', 'u');
 
-export type BindingArrow = '<-' | '<->' | '->';
+/**
+ * How the expression on a line is introduced: one of the three arrows, or `if` -- the condition of an `if` / `else if`
+ * header, which the compiler parses as a binding expression and lowers into a `Shown <- …` on every widget of the
+ * branch. Everything this file answers about a `<-` right side it answers about a condition the same way.
+ */
+export type BindingArrow = '<-' | '<->' | '->' | 'if';
 
 export interface BindingTail {
     op: BindingArrow;
@@ -33,14 +38,25 @@ export interface BindingTail {
 }
 
 /**
+ * `if Cond`, `} else if Cond`, `else if Cond` at the start of a line -- the `if` the parser takes as a keyword, which
+ * is only one that leads a branch and is followed by something a condition can begin with (CanBeginCondition). A
+ * property that happens to be called `if` (`if = 3`) is still a property, and is not matched.
+ */
+const CONDITION_HEADER = /^(\s*(?:\}\s*)?(?:else\s+)?if)(?=\s*$|\s+[(!@"\-0-9A-Za-z_\u00A0-\uFFFF]|[(!@"\-])/u;
+
+/**
  * The binding expression on this line, or nothing. Arrows inside strings and comments are passed
  * over rather than matched: the corpus documents its own syntax in tooltips
  * (`ToolTipText = "RenderOpacity <- MasterVolume: ..."`), and a quoted arrow that opened
  * completion on a prose sentence would be this feature's most visible mistake.
+ *
+ * With no arrow, an `if` header's condition is the expression -- up to its `{`: past the brace the cursor stands in
+ * the branch, where a widget goes, not in the condition.
  */
 export function bindingTailOf(line: string): BindingTail | undefined {
     let found: BindingTail | undefined;
     let inString = false;
+    let firstBrace = -1;
     for (let index = 0; index < line.length; index++) {
         const character = line[index];
         if (inString) {
@@ -58,6 +74,9 @@ export function bindingTailOf(line: string): BindingTail | undefined {
         if (character === '/' && line[index + 1] === '/') {
             break; // a line comment: nothing past it is code
         }
+        if (character === '{' && firstBrace < 0) {
+            firstBrace = index;
+        }
         // The three-character arrow is tested first -- it contains both of the others.
         const op: BindingArrow | undefined = line.startsWith('<->', index) ? '<->'
             : line.startsWith('<-', index) ? '<-'
@@ -67,14 +86,31 @@ export function bindingTailOf(line: string): BindingTail | undefined {
             index += op.length - 1;
         }
     }
-    return found;
+    if (found) {
+        return found;
+    }
+    const header = CONDITION_HEADER.exec(line);
+    if (header) {
+        const tailStart = header[1].length;
+        // A `}` closing the previous branch sits BEFORE the keyword; only a brace after it ends the condition.
+        if (firstBrace >= 0 && firstBrace >= tailStart) {
+            return undefined;
+        }
+        return { op: 'if', tail: line.slice(tailStart), tailStart };
+    }
+    return undefined;
 }
 
 export interface CallContext {
-    /** The function being called. */
+    /** The function being called -- or, for `emit Picked(`, the event being raised. */
     name: string;
     /** 0-based index of the argument the cursor stands in. */
     argIndex: number;
+    /**
+     * `-> emit Picked(Index, ` -- the call is an event this file's `events` block declares, raised with arguments
+     * that are binding expressions. Present only when true, so a plain call's context is the same object it was.
+     */
+    isEmit?: true;
 }
 
 /**
@@ -86,14 +122,16 @@ export interface CallContext {
  */
 export function callContextAt(expressionUpToCursor: string): CallContext | undefined {
     const tokens = scan(expressionUpToCursor).tokens;
-    const frames: { name?: string; argIndex: number }[] = [];
+    const frames: { name?: string; argIndex: number; isEmit: boolean }[] = [];
     for (let index = 0; index < tokens.length; index++) {
         const token = tokens[index];
         if (token.kind === 'openParen') {
             const previous = index > 0 ? tokens[index - 1] : undefined;
+            const beforeName = index > 1 ? tokens[index - 2] : undefined;
             frames.push({
                 name: previous?.kind === 'identifier' ? previous.text : undefined,
                 argIndex: 0,
+                isEmit: previous?.kind === 'identifier' && beforeName?.kind === 'identifier' && beforeName.text === 'emit',
             });
         } else if (token.kind === 'closeParen') {
             frames.pop();
@@ -104,7 +142,9 @@ export function callContextAt(expressionUpToCursor: string): CallContext | undef
     for (let depth = frames.length - 1; depth >= 0; depth--) {
         const frame = frames[depth];
         if (frame.name) {
-            return { name: frame.name, argIndex: frame.argIndex };
+            return frame.isEmit
+                ? { name: frame.name, argIndex: frame.argIndex, isEmit: true }
+                : { name: frame.name, argIndex: frame.argIndex };
         }
     }
     return undefined;

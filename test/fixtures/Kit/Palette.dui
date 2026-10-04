@@ -1,0 +1,10 @@
+// The kit's palette: no root, so a library. KitLibrary takes it under a namespace (`use … as pal`), and screens reach
+// it through that library's own namespace in turn (`@kit.pal.Shade`).
+resources {
+    Color Swatch = #E6E9F0
+    Color Shade  = #1B1E26
+}
+
+style Base {
+    RenderOpacity = 1
+}

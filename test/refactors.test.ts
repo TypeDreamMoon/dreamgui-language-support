@@ -135,3 +135,71 @@ test('inlining a broken chain is refused with the code to fix first', () => {
     const plan = planInlineStyle(built, source, node);
     assert.ok('error' in plan && /DUI3004/.test(plan.error));
 });
+
+// ---- the component grammar's forms -------------------------------------------------------------
+
+test('extracting a style from an unnamed node puts the clause straight after its type', () => {
+    const source = 'Widget Root {\n    HorizontalBox {\n        Spacing = 14\n        Padding = (1, 2, 3, 4)\n        Text A {}\n    }\n}\n';
+    const built = buildStructure(source);
+    const plan = planExtractStyle(built, source, source.indexOf('Spacing'), source.indexOf('(1, 2, 3, 4)') + 12, 'Strip');
+    const result = applyRenameEdits(source, mustPlan(plan));
+    assert.ok(result.includes('    HorizontalBox : Strip {'));
+    const rebuilt = buildStructure(result);
+    assert.deepEqual(rebuilt.diagnostics, []);
+    const box = rebuilt.roots[0].children[0];
+    assert.ok(box.anonymous);
+    assert.equal(box.styleName, 'Strip');
+    assert.deepEqual(rebuilt.styles[0].properties.map((p) => p.path), ['Spacing', 'Padding']);
+});
+
+test('an if arm holds widgets only: a selection in one is no node body', () => {
+    const source = 'Widget Root {\n    if HasSave() {\n        Text A {}\n    }\n}\n';
+    const built = buildStructure(source);
+    const plan = planExtractStyle(built, source, source.indexOf('Text A'), source.indexOf('Text A') + 6, 'S');
+    assert.ok('error' in plan);
+});
+
+const COLUMN = 'style Column {\n    + VerticalBox { Spacing = 8 }\n    FontSize = 18\n    @slot Padding = (0, 4, 0, 0)\n    @fill\n}\n\n'
+    + 'Widget Root {\n    + HorizontalBox {}\n    Widget Left : Column {\n        @slot Padding = (1, 1, 1, 1)\n    }\n}\n';
+
+test('inlining a style lands its components, widget lines and slot lines, each as what it was', () => {
+    const built = buildStructure(COLUMN);
+    const node = wornStyleAt(built, COLUMN.indexOf(': Column') + 3)!;
+    const result = applyRenameEdits(COLUMN, mustPlan(planInlineStyle(built, COLUMN, node)));
+    const rebuilt = buildStructure(result);
+    assert.deepEqual(rebuilt.diagnostics, []);
+    const left = rebuilt.roots[0].children[0];
+    assert.equal(left.styleName, undefined);
+    assert.deepEqual(left.components.map((c) => c.name), ['VerticalBox']);
+    assert.ok(result.includes('+ VerticalBox { Spacing = 8 }'));
+    // The widget line stays a widget line; the slot lines stay slot lines.
+    const widgetLines = left.properties.filter((p) => !p.isSlot).map((p) => p.path);
+    assert.deepEqual(widgetLines, ['FontSize']);
+    assert.ok(left.properties.some((p) => p.shorthand === 'fill'), '@fill came along');
+    // The node's own @slot Padding won over the style's: one Padding, the node's value.
+    const paddings = left.properties.filter((p) => p.isSlot && p.path === 'Padding');
+    assert.equal(paddings.length, 1);
+    assert.equal(result.slice(paddings[0].valueStart!, paddings[0].valueEnd!), '(1, 1, 1, 1)');
+});
+
+test('inlining refuses a component the node writes too: the merge is the author\'s', () => {
+    const source = 'style Column {\n    + VerticalBox { Spacing = 8 }\n}\n\nWidget Root {\n    Widget Left : Column {\n'
+        + '        + VerticalBox { Padding = (1, 1, 1, 1) }\n    }\n}\n';
+    const built = buildStructure(source);
+    const plan = planInlineStyle(built, source, wornStyleAt(built, source.indexOf(': Column') + 3)!);
+    assert.ok('error' in plan && /VerticalBox/.test(plan.error));
+});
+
+test('a style from a namespace, or brought in by use, is not this file\'s to inline', () => {
+    const source = 'use "UI/Lib.dui" as ui\nuse "UI/Common.dui"\n\nWidget Root {\n    Text A : ui.Caption {}\n    Text B : Label {}\n}\n';
+    const built = buildStructure(source);
+    const namespaced = planInlineStyle(built, source, wornStyleAt(built, source.indexOf('ui.Caption') + 4)!);
+    assert.ok('error' in namespaced && /命名空间/.test(namespaced.error));
+    const imported = planInlineStyle(built, source, wornStyleAt(built, source.indexOf(': Label') + 3)!);
+    assert.ok('error' in imported && /use/.test(imported.error));
+});
+
+test('the weight of @fill is no extractable literal', () => {
+    const source = 'Widget Root {\n    + HorizontalBox {}\n    Text A {\n        @fill 2\n    }\n}\n';
+    assert.equal(extractableLiteralAt(buildStructure(source), source, source.indexOf('2\n')), undefined);
+});

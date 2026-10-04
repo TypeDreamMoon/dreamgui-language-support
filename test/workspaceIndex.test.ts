@@ -152,3 +152,156 @@ test('update replaces and remove forgets', () => {
     assert.equal(index.fileForClass('/Game/UI/WBP_Renamed'), undefined);
     assert.equal(index.size, 1);
 });
+
+// ---- components, libraries and namespaces --------------------------------------------------------
+
+const KIT: Record<string, string> = {
+    'I:/proj/DUI/Kit/Palette.dui': 'resources {\n    Color Swatch = #E6E9F0\n}\nstyle Base {\n}\n',
+    'I:/proj/DUI/Kit/Library.dui': [
+        'use "Kit/Row.dui" as Row',
+        'use /Game/UI/WBP_Slider as Slider',
+        'use "Kit/Palette.dui" as pal',
+        'use "Kit/Missing.dui" as Ghost',
+        'resources {',
+        '    Asset Card = /Game/UI/WBP_Card',
+        '    Color Ink = #514D42',
+        '}',
+        'style Caption : pal.Base {',
+        '}',
+        '',
+    ].join('\n'),
+    'I:/proj/DUI/Kit/Row.dui': [
+        'class /Game/UI/WBP_Row',
+        'use "Kit/Library.dui"',
+        'props {',
+        '    Text Label',
+        '    Enum /Script/Kit.EKind Kind = Cycle',
+        '}',
+        'events {',
+        '    Changed(Number Index, Enum /Script/Kit.EStep Step); Closed',
+        '}',
+        'Widget Root : Caption {',
+        '    HorizontalBox {',
+        '        Text { }',
+        '    }',
+        '    slot Body default',
+        '    slot Footer',
+        '}',
+        '',
+    ].join('\n'),
+    'I:/proj/DUI/Kit/Card.dui': 'class /Game/UI/WBP_Card\nWidget Root { }\n',
+    'I:/proj/DUI/Screen.dui': [
+        'use "Kit/Library.dui"',
+        'use "Kit/Library.dui" as kit',
+        'use /Game/UI/WBP_Row as Row',
+        'Widget Root {',
+        '    Row R {',
+        '        slot Footer { Text Note { } }',
+        '    }',
+        '}',
+        '',
+    ].join('\n'),
+};
+
+function kitIndex(): WorkspaceIndex {
+    const index = new WorkspaceIndex();
+    for (const [file, text] of Object.entries(KIT)) {
+        index.update(file, text);
+    }
+    return index;
+}
+
+test('a summary carries aliases, uses, props, events, slots and the made ids of unnamed nodes', () => {
+    const row = summarizeFile('I:/proj/DUI/Kit/Row.dui', KIT['I:/proj/DUI/Kit/Row.dui']);
+    assert.equal(row.hasRoot, true);
+    assert.deepEqual(row.uses, [{ path: 'Kit/Library.dui', targetKind: 'file' }]);
+    assert.deepEqual(row.props.map((p) => `${p.type} ${p.name}${p.defaultText ? ' = ' + p.defaultText : ''}`),
+        ['Text Label', 'Enum /Script/Kit.EKind Kind = Cycle']);
+    assert.deepEqual(row.events.map((e) => `${e.name}(${e.params})`),
+        ['Changed(Number Index, Enum /Script/Kit.EStep Step)', 'Closed()']);
+    assert.deepEqual(row.slots.map((s) => `${s.name}${s.isDefault ? ' default' : ''}`), ['Body default', 'Footer']);
+    assert.deepEqual(row.nodes.map((n) => `${n.kind}:${n.id}${n.anonymous ? ' (made)' : ''}`),
+        ['node:Root', 'node:Root__HorizontalBox0 (made)', 'node:Root__HorizontalBox0__Text0 (made)', 'namedSlot:Body', 'namedSlot:Footer']);
+    // An unnamed node is sited at its type, the word the author wrote for it.
+    const box = row.nodes[1];
+    assert.equal(KIT['I:/proj/DUI/Kit/Row.dui'].slice(box.start, box.end), 'HorizontalBox');
+
+    const library = summarizeFile('I:/proj/DUI/Kit/Library.dui', KIT['I:/proj/DUI/Kit/Library.dui']);
+    assert.equal(library.hasRoot, false);
+    assert.deepEqual(library.aliases.map((a) => `${a.name}=${a.targetKind}:${a.target}`),
+        ['Row=file:Kit/Row.dui', 'Slider=class:/Game/UI/WBP_Slider', 'pal=file:Kit/Palette.dui', 'Ghost=file:Kit/Missing.dui']);
+    assert.deepEqual(library.imports, ['Kit/Row.dui', 'Kit/Palette.dui', 'Kit/Missing.dui']);
+    assert.equal(library.resources[0].value, '/Game/UI/WBP_Card');
+
+    // A host's fill names the component's slot, not an id of the host's class.
+    const screen = summarizeFile('I:/proj/DUI/Screen.dui', KIT['I:/proj/DUI/Screen.dui']);
+    assert.deepEqual(screen.nodes.map((n) => n.id), ['Root', 'R', 'Note']);
+    assert.deepEqual(screen.slots, []);
+});
+
+test('aliasesVisibleFrom: own first, then what plain uses re-export, then a namespace\'s under its prefix', () => {
+    const index = kitIndex();
+    assert.deepEqual(index.aliasesVisibleFrom('I:/proj/DUI/Screen.dui').map((a) => `${a.name}@${a.file.slice(12)}`),
+        ['Row@Screen.dui', 'Slider@Kit/Library.dui', 'Ghost@Kit/Library.dui', 'kit.Row@Kit/Library.dui',
+            'kit.Slider@Kit/Library.dui', 'kit.Ghost@Kit/Library.dui']);
+    // A library's own `as` on a file with no root is a namespace, never a type; one that resolves to nothing is kept.
+    assert.deepEqual(index.aliasesVisibleFrom('I:/proj/DUI/Kit/Library.dui').map((a) => a.name), ['Row', 'Slider', 'Ghost']);
+    assert.deepEqual(index.aliasesVisibleFrom('I:/proj/DUI/Nowhere.dui'), []);
+});
+
+test('resolveComponent: a file alias to its class line, a class alias to its path, @Name through an Asset entry', () => {
+    const index = kitIndex();
+    const viaLibrary = index.resolveComponent('I:/proj/DUI/Kit/Card.dui', 'Row');
+    assert.equal(viaLibrary, undefined); // Card uses nothing
+
+    const fromRow = index.resolveComponent('I:/proj/DUI/Kit/Row.dui', 'row')!;
+    assert.deepEqual([fromRow.file, fromRow.classPath, fromRow.declaredAt?.file],
+        ['I:/proj/DUI/Kit/Row.dui', '/Game/UI/WBP_Row', 'I:/proj/DUI/Kit/Library.dui']);
+    const namespaced = index.resolveComponent('I:/proj/DUI/Screen.dui', 'kit.Row')!;
+    assert.deepEqual([namespaced.file, namespaced.classPath], ['I:/proj/DUI/Kit/Row.dui', '/Game/UI/WBP_Row']);
+    const slider = index.resolveComponent('I:/proj/DUI/Screen.dui', 'Slider')!;
+    assert.deepEqual([slider.file, slider.classPath], [undefined, '/Game/UI/WBP_Slider']);
+    // The screen's own `as Row` wins over the library's.
+    assert.equal(index.resolveComponent('I:/proj/DUI/Screen.dui', 'Row')?.declaredAt?.file, 'I:/proj/DUI/Screen.dui');
+
+    const card = index.resolveComponent('I:/proj/DUI/Screen.dui', '@Card')!;
+    assert.deepEqual([card.classPath, card.file, card.declaredAt], ['/Game/UI/WBP_Card', 'I:/proj/DUI/Kit/Card.dui', undefined]);
+    assert.equal(index.resolveComponent('I:/proj/DUI/Screen.dui', '@Ink'), undefined); // a Color is no class
+    assert.equal(index.resolveComponent('I:/proj/DUI/Screen.dui', 'Sparkle'), undefined);
+});
+
+test('importScopeOf merges as the compiler merges: plain, under a namespace, and transitively', () => {
+    const index = kitIndex();
+    const screen = index.summaryOf('I:/proj/DUI/Screen.dui')!;
+    const scope = index.importScopeOf(screen.uses, screen.file);
+    assert.deepEqual([...scope.styles].sort(), ['caption', 'kit.caption', 'kit.pal.base', 'pal.base']);
+    assert.deepEqual([...scope.resources.keys()].sort(),
+        ['card', 'ink', 'kit.card', 'kit.ink', 'kit.pal.swatch', 'pal.swatch']);
+    assert.deepEqual([...scope.namespaces].sort(), ['kit', 'pal']);
+    // Library.dui names Kit/Missing.dui, which nothing here answers: what it may bring is unknown.
+    assert.equal(scope.complete, false);
+
+    // A component that styles itself from the library naming it is no cycle: the library takes its class only.
+    const row = index.summaryOf('I:/proj/DUI/Kit/Row.dui')!;
+    index.update('I:/proj/DUI/Kit/Library.dui', KIT['I:/proj/DUI/Kit/Library.dui'].replace('use "Kit/Missing.dui" as Ghost\n', ''));
+    const rowScope = index.importScopeOf(row.uses, row.file);
+    assert.equal(rowScope.complete, true);
+    assert.deepEqual(rowScope.aliases.map((a) => a.name), ['Row', 'Slider']);
+});
+
+test('a real cycle of plain uses is followed once, and leaves the scope incomplete', () => {
+    const index = new WorkspaceIndex();
+    index.update('I:/p/DUI/A.dui', 'use "B.dui"\nstyle InA { }\n');
+    index.update('I:/p/DUI/B.dui', 'use "A.dui"\nstyle InB { }\n');
+    const scope = index.importScopeOf([{ path: 'A.dui', targetKind: 'file' }], 'I:/p/DUI/Main.dui');
+    assert.deepEqual([...scope.styles].sort(), ['ina', 'inb']);
+    assert.equal(scope.complete, false);
+});
+
+test('classifyAlias: a class path is a component, a file with a root too, one without a namespace', () => {
+    const index = kitIndex();
+    assert.equal(index.classifyAlias({ target: '/Game/X', targetKind: 'class' }), 'component');
+    assert.equal(index.classifyAlias({ target: 'Kit/Row.dui', targetKind: 'file' }), 'component');
+    assert.equal(index.classifyAlias({ target: 'Kit/Palette.dui', targetKind: 'file' }), 'namespace');
+    assert.equal(index.classifyAlias({ target: 'Kit/Missing.dui', targetKind: 'file' }), 'unresolved');
+});

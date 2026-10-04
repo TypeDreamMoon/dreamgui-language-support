@@ -147,3 +147,43 @@ test('names compare the way FName would', () => {
     assert.ok(!isIdentifier('Track.Title'));
     assert.ok(!isIdentifier('2nd'));
 });
+
+// ---- conditions and emit: the expressions the component grammar added ---------------------------
+
+test('an if header\'s condition is a binding expression, up to its brace', () => {
+    assert.deepEqual(bindingTailOf('    if HasSave'), { op: 'if', tail: ' HasSave', tailStart: 6 });
+    assert.equal(bindingTailOf('    } else if IsLoading(')?.op, 'if');
+    assert.equal(bindingTailOf('    else if !Locked')?.op, 'if');
+    assert.equal(bindingTailOf('    if ')?.op, 'if');
+    // Past the brace the cursor is in the branch.
+    assert.equal(bindingTailOf('    if HasSave() { '), undefined);
+    // ...where an arrow is a binding again.
+    assert.equal(bindingTailOf('    if HasSave() { Text <- Ti')?.op, '<-');
+    // A property called `if` is a property, and `else` alone leads no condition.
+    assert.equal(bindingTailOf('    if = 3'), undefined);
+    assert.equal(bindingTailOf('    } else {'), undefined);
+    // An identifier that merely starts with "if" is no keyword.
+    assert.equal(bindingTailOf('    iffy = 3'), undefined);
+});
+
+test('a call in a condition has its argument context like any other', () => {
+    const tail = bindingTailOf('    if CanAfford(Price, ')!;
+    assert.deepEqual(callContextAt(tail.tail), { name: 'CanAfford', argIndex: 1 });
+});
+
+test('emit Picked( is an event being raised, not a function being called', () => {
+    assert.deepEqual(callContextAt(' emit Picked('), { name: 'Picked', argIndex: 0, isEmit: true });
+    assert.deepEqual(callContextAt(' emit Picked(Index, '), { name: 'Picked', argIndex: 1, isEmit: true });
+    // A call inside an emit argument is the call's.
+    assert.deepEqual(callContextAt(' emit Picked(Fmt(A, '), { name: 'Fmt', argIndex: 1 });
+    // `emit` alone is still a name: emit(x) is a call.
+    assert.deepEqual(callContextAt(' emit('), { name: 'emit', argIndex: 0 });
+});
+
+test('a loop body after an if arm is still an each scope', () => {
+    const source = 'Widget Root {\n    + UIListView {}\n    if HasItems() {\n        Text Head {}\n    }\n'
+        + '    each Item in GetItems() {\n        Text Cell { Text <- Item.Name }\n    }\n}\n';
+    const scopes = eachScopesOf(buildStructure(source), source);
+    assert.equal(scopes.length, 1);
+    assert.equal(scopes[0].sourceText, 'GetItems()');
+});

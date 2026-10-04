@@ -13,7 +13,7 @@ import { buildStructure, scopeAt as coreScopeAt, StructNode } from './core/struc
 export type Structure = ReturnType<typeof buildStructure>;
 
 export interface NodeScope {
-    kind: 'node' | 'component' | 'resources' | 'style' | 'loop';
+    kind: 'node' | 'component' | 'resources' | 'style' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines';
     /** Node tag ("Text"), component name ("VerticalBox" or "/Script/..."), style name. */
     name: string;
     /** Node id, when the scope is a node. */
@@ -39,9 +39,22 @@ export interface StyleEntry {
 export interface OutlineNode {
     kind: StructNode['kind'];
     tag: string;
+    /** For an unnamed node, the id the compiler makes for it (`Root__HorizontalBox0`). */
     id: string;
     line: number;
     children: OutlineNode[];
+    /** No id written: the outline names it by its type, and shows the made-up id beside it. */
+    anonymous?: boolean;
+    /** A branch's condition as written (absent for `else`). */
+    condition?: string;
+    /** A named slot that a host fills, rather than one a component declares. */
+    fillsSlot?: boolean;
+    defaultSlot?: boolean;
+    /** Offsets: the header's first character to one past the block's '}' (or the header's end), and the name. */
+    start: number;
+    end: number;
+    selectionStart: number;
+    selectionEnd: number;
 }
 
 export interface DocModel {
@@ -63,10 +76,30 @@ export function buildModel(document: vscode.TextDocument): DocModel {
     }
 
     const structure = buildStructure(document.getText());
-    const toOutline = (node: StructNode): OutlineNode => ({
-        kind: node.kind, tag: node.tag, id: node.id, line: node.line - 1,
-        children: node.children.map(toOutline),
-    });
+    const toOutline = (node: StructNode): OutlineNode => {
+        const selectionStart = node.idStart ?? node.start;
+        const selectionEnd = node.idStart !== undefined ? node.idStart + node.id.length : node.tagEnd ?? node.start + node.tag.length;
+        const out: OutlineNode = {
+            kind: node.kind, tag: node.tag, id: node.id, line: node.line - 1,
+            children: node.children.map(toOutline),
+            start: node.start,
+            end: Math.max(selectionEnd, node.bodyEnd !== undefined ? node.bodyEnd + 1 : selectionEnd),
+            selectionStart, selectionEnd,
+        };
+        if (node.anonymous) {
+            out.anonymous = true;
+        }
+        if (node.condition !== undefined) {
+            out.condition = node.condition;
+        }
+        if (node.fillsSlot) {
+            out.fillsSlot = true;
+        }
+        if (node.defaultSlot) {
+            out.defaultSlot = true;
+        }
+        return out;
+    };
     const model: DocModel = {
         structure,
         // A resource's line/column already point at its name token; a style's point at the

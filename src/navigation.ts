@@ -2,15 +2,43 @@
  * Cross-file navigation over the workspace index: workspace symbols, definitions that cross
  * files, references. Every provider awaits one lazy workspace sweep, then reads the index the
  * host keeps current.
+ *
+ * Go-to-definition for the names the component grammar added -- aliases, namespaces, imported
+ * styles and resources, props, events, `emit` -- is core/componentIntel's definitionAt; the file's
+ * own `@Name` and `: Style` are answered by the same function, so one provider owns them all.
  */
 import * as vscode from 'vscode';
 import { WorkspaceIndexHost } from './workspace';
 import { SymbolSite, referencesAt } from './core/workspaceIndex';
+import { definitionAt, DefinitionHit } from './core/componentIntel';
 import { buildModel } from './docmodel';
 
 function siteLocation(site: SymbolSite): vscode.Location {
     return new vscode.Location(vscode.Uri.file(site.file),
         new vscode.Position(site.line - 1, site.column - 1));
+}
+
+/**
+ * A definition target as a vscode range. Offsets are exact, so the target document is read to convert them -- the
+ * asking one directly, another through openTextDocument (loaded, not shown). A file that cannot be opened falls back
+ * to the line and column the index recorded.
+ */
+async function targetRange(document: vscode.TextDocument, target: DefinitionHit['target']):
+    Promise<{ uri: vscode.Uri; range: vscode.Range } | undefined> {
+    const uri = target.file === document.uri.fsPath ? document.uri : vscode.Uri.file(target.file);
+    try {
+        const targetDocument = uri === document.uri ? document : await vscode.workspace.openTextDocument(uri);
+        return {
+            uri,
+            range: new vscode.Range(targetDocument.positionAt(target.start), targetDocument.positionAt(target.end)),
+        };
+    } catch {
+        if (target.line === undefined || target.column === undefined) {
+            return undefined;
+        }
+        const at = new vscode.Position(target.line - 1, target.column - 1);
+        return { uri, range: new vscode.Range(at, at) };
+    }
 }
 
 export function registerNavigation(context: vscode.ExtensionContext, host: WorkspaceIndexHost): void {
@@ -55,12 +83,36 @@ export function registerNavigation(context: vscode.ExtensionContext, host: Works
         },
     }));
 
+    // ---- definition: aliases, namespaces, borrowed styles and resources, props, events, emit ------------
+    context.subscriptions.push(vscode.languages.registerDefinitionProvider({ language: 'dui' }, {
+        async provideDefinition(document, position) {
+            await host.ensureScannedFor(document.uri.scheme === 'file' ? document.uri.fsPath : undefined);
+            const hit = definitionAt(host.index, document.uri.fsPath, buildModel(document).structure,
+                document.offsetAt(position));
+            if (!hit) {
+                return undefined;
+            }
+            const target = await targetRange(document, hit.target);
+            if (!target) {
+                return undefined;
+            }
+            const link: vscode.LocationLink = {
+                originSelectionRange: new vscode.Range(
+                    document.positionAt(hit.originStart), document.positionAt(hit.originEnd)),
+                targetUri: target.uri,
+                targetRange: target.range,
+                targetSelectionRange: target.range,
+            };
+            return [link];
+        },
+    }));
+
     // ---- definition across files: a nested '/Game/X' tag -> the .dui whose class line is X -----
     // A.dui never names B.dui; it names the CLASS B.dui compiles into. The index bridges that
     // indirection, so F12 on the tag lands on the declaring file's class line.
     context.subscriptions.push(vscode.languages.registerDefinitionProvider({ language: 'dui' }, {
         async provideDefinition(document, position) {
-            const range = document.getWordRangeAtPosition(position, /\/[\w/. -￿]+/u);
+            const range = document.getWordRangeAtPosition(position, /\/[\w/.\u00A0-\uFFFF]+/u);
             if (!range) {
                 return undefined;
             }

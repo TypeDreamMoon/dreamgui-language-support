@@ -53,6 +53,8 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
             structure: model.structure,
             index: host?.index,
             tags: symbols ? Object.keys(symbols.tags) : undefined,
+            // What each tag IS (a visual, a container and its class): the words DUI3018 is said in.
+            tagInfo: symbols?.tags,
         });
 
         collection.set(document.uri, judged.map((source) => toVscode(document, source)));

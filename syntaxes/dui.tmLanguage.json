@@ -7,13 +7,22 @@
     { "include": "#class-line" },
     { "include": "#use-directive" },
     { "include": "#resources-block" },
+    { "include": "#props-block" },
+    { "include": "#events-block" },
+    { "include": "#timeline-external" },
+    { "include": "#timeline-block" },
     { "include": "#style-declaration" },
     { "include": "#slot-declaration" },
     { "include": "#loop-header" },
+    { "include": "#conditional" },
+    { "include": "#else" },
     { "include": "#component-line" },
+    { "include": "#fill-shorthand" },
+    { "include": "#slot-block" },
     { "include": "#slot-property" },
     { "include": "#key-override" },
     { "include": "#two-way-binding" },
+    { "include": "#emit-route" },
     { "include": "#event-route" },
     { "include": "#binding" },
     { "include": "#property-assignment" },
@@ -27,6 +36,11 @@
         { "name": "comment.block.dui", "begin": "/\\*", "end": "\\*/" }
       ]
     },
+    "qualifier": {
+      "comment": "The `nier` of `nier.Row`, `: nier.Label`, `@nier.Ink` -- and the `Native` of `Native.Button`, a registry scope written the same way. Applied inside a capture that already carries the name's own scope. Never after a `/` or a word character, so `/Script/MyGame.MyWidget` keeps its module unmarked.",
+      "match": "(?<![/\\w\\u00A0-\\uFFFF])[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?=\\.)",
+      "name": "entity.name.namespace.qualifier.dui"
+    },
     "class-line": {
       "match": "^\\s*(class)\\s+(/[\\w/.]+)",
       "captures": {
@@ -35,10 +49,14 @@
       }
     },
     "use-directive": {
-      "match": "^\\s*(use)\\s+(\"[^\"]*\")",
+      "comment": "`use \"Lib.dui\"`, `use \"Row.dui\" as Row`, `use /Game/UI/WBP_Row as Row`, `use \"Lib.dui\" as nier`. Whether the name after `as` is a component or a namespace depends on whether the file has a root, which no grammar can see, so both get one scope.",
+      "match": "^\\s*(use)\\s+(?:(\"[^\"]*\")|(/[\\w/.\\u00A0-\\uFFFF]+))(?:\\s+(as)\\b(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*))?)?",
       "captures": {
         "1": { "name": "keyword.control.use.dui" },
-        "2": { "name": "string.quoted.double.import.dui" }
+        "2": { "name": "string.quoted.double.import.dui" },
+        "3": { "name": "entity.name.namespace.assetpath.dui" },
+        "4": { "name": "keyword.control.as.dui" },
+        "5": { "name": "entity.name.type.alias.dui" }
       }
     },
     "resources-block": {
@@ -62,24 +80,173 @@
         { "include": "#values" }
       ]
     },
+    "props-block": {
+      "comment": "`props { Text Label  Number ValueIndex = 0  Enum /Script/M.EKind Kind = Cycle }`, one entry per line or per `;`. The type words are the compiler's (MakeDeclaredPinType); any other word is left uncoloured, the way an unknown resource type is, so a typo shows before the compile says DUI6008.",
+      "begin": "^\\s*(props)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.props.dui" },
+        "2": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "match": "(?:^|(?<=[;{]))\\s*(Text|String|Number|Integer|Bool|Color|Vector2|Asset|Class|Enum)\\b(?:\\s+(/[\\w/.\\u00A0-\\uFFFF]+))?\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+          "captures": {
+            "1": { "name": "storage.type.prop.dui" },
+            "2": { "name": "entity.name.namespace.assetpath.dui" },
+            "3": { "name": "entity.name.variable.prop.dui" }
+          }
+        },
+        {
+          "begin": "(=)",
+          "beginCaptures": { "1": { "name": "keyword.operator.assignment.dui" } },
+          "end": "(?=[;}])|$",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#values" },
+            { "include": "#enum-value" }
+          ]
+        }
+      ]
+    },
+    "events-block": {
+      "comment": "`events { Picked(Number Index); Closed }`: entries end at a line break or a `;`, so a short list fits on one line.",
+      "begin": "^\\s*(events)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.events.dui" },
+        "2": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "comment": "An entry with parameters. The region also ends before a `}`, so a `(` left open cannot swallow the rest of the file.",
+          "begin": "(?:^|(?<=[;{]))\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.event.dui" },
+            "2": { "name": "punctuation.section.parens.begin.dui" }
+          },
+          "end": "(\\))|(?=\\})",
+          "endCaptures": { "1": { "name": "punctuation.section.parens.end.dui" } },
+          "patterns": [
+            { "include": "#comments" },
+            {
+              "match": "(Text|String|Number|Integer|Bool|Color|Vector2|Asset|Class|Enum)\\b(?:\\s+(/[\\w/.\\u00A0-\\uFFFF]+))?\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+              "captures": {
+                "1": { "name": "storage.type.parameter.dui" },
+                "2": { "name": "entity.name.namespace.assetpath.dui" },
+                "3": { "name": "variable.parameter.event.dui" }
+              }
+            },
+            { "match": ",", "name": "punctuation.separator.parameter.dui" }
+          ]
+        },
+        {
+          "match": "(?:^|(?<=[;{]))\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+          "captures": { "1": { "name": "entity.name.function.event.dui" } }
+        }
+      ]
+    },
+    "timeline-external": {
+      "match": "^\\s*(timeline)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s+(external)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.timeline.dui" },
+        "2": { "name": "entity.name.type.timeline.dui" },
+        "3": { "name": "storage.modifier.external.dui" }
+      }
+    },
+    "timeline-block": {
+      "comment": "A `timeline` block: `duration` / `loop` settings, track lines (`Row/Title.RenderTranslation : 0.0 = (-40, 0, 0), 0.2 = (0, 0, 0) ease OutCubic`) and event keys (`@0.3 -> Landed`). Its own region so a track line's `:` is never read as an anonymous node's style clause.",
+      "begin": "^\\s*(timeline)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.timeline.dui" },
+        "2": { "name": "entity.name.type.timeline.dui" },
+        "3": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "match": "^\\s*(duration|loop)\\s*(=)",
+          "captures": {
+            "1": { "name": "keyword.other.timeline.dui" },
+            "2": { "name": "keyword.operator.assignment.dui" }
+          }
+        },
+        {
+          "match": "(@)(\\d+(?:\\.\\d+)?)\\s*(->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)?",
+          "captures": {
+            "1": { "name": "punctuation.definition.time.dui" },
+            "2": { "name": "constant.numeric.dui" },
+            "3": { "name": "keyword.operator.event-route.dui" },
+            "4": { "name": "entity.name.function.event.dui" }
+          }
+        },
+        {
+          "match": "^\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w/.\\u00A0-\\uFFFF]*)\\s*(:)",
+          "captures": {
+            "1": { "name": "variable.other.property.track.dui" },
+            "2": { "name": "punctuation.separator.track.dui" }
+          }
+        },
+        {
+          "match": "\\b(ease)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+          "captures": {
+            "1": { "name": "keyword.other.ease.dui" },
+            "2": { "name": "support.function.ease.dui" }
+          }
+        },
+        { "match": "\\b(?:Once|Loop|PingPong)\\b", "name": "support.constant.property-value.dui" },
+        { "match": "=", "name": "keyword.operator.assignment.dui" },
+        { "include": "#values" }
+      ]
+    },
     "style-declaration": {
-      "match": "^\\s*(style)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*))?",
+      "match": "^\\s*(style)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?",
       "captures": {
         "1": { "name": "keyword.control.style.dui" },
         "2": { "name": "entity.name.type.style.dui" },
         "3": { "name": "punctuation.separator.inheritance.dui" },
-        "4": { "name": "entity.other.inherited-class.style.dui" }
+        "4": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] }
       }
     },
     "slot-declaration": {
-      "match": "^\\s*(slot)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
-      "captures": {
+      "comment": "`slot Footer`, `slot Rows default : RowList {`, `slot Old (was: Older)` -- a declaration -- and `slot Detail {` in a host, a fill. The clauses come in any order, as the parser takes them, so the header is a region that ends at its `{` or the end of the line.",
+      "begin": "(?:^|(?<=[{;]))\\s*(slot)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "beginCaptures": {
         "1": { "name": "keyword.control.slot.dui" },
         "2": { "name": "entity.name.tag.namedslot.dui" }
+      },
+      "end": "(?=\\{)|$",
+      "patterns": [
+        { "include": "#comments" },
+        { "match": "\\bdefault\\b", "name": "storage.modifier.default.dui" },
+        { "include": "#was-clause" },
+        {
+          "match": "(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)",
+          "captures": {
+            "1": { "name": "punctuation.separator.style.dui" },
+            "2": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] }
+          }
+        }
+      ]
+    },
+    "was-clause": {
+      "match": "(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\))",
+      "captures": {
+        "1": { "name": "punctuation.section.parens.begin.dui" },
+        "2": { "name": "keyword.control.was.dui" },
+        "3": { "name": "punctuation.separator.dui" },
+        "4": { "name": "entity.name.section.oldid.dui" },
+        "5": { "name": "punctuation.section.parens.end.dui" }
       }
     },
     "loop-header": {
-      "match": "^\\s*(for|each)\\s+([\\w\\u00A0-\\uFFFF]+)\\s+(in)\\b(?:\\s+(?:([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\(\\s*\\))|([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)))?",
+      "match": "(?:^|(?<=[{;]))\\s*(for|each)\\s+([\\w\\u00A0-\\uFFFF]+)\\s+(in)\\b(?:\\s+(?:([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\(\\s*\\))|([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)))?",
       "captures": {
         "1": { "name": "keyword.control.loop.dui" },
         "2": { "name": "variable.parameter.loop.dui" },
@@ -89,12 +256,64 @@
         "6": { "name": "variable.other.dui" }
       }
     },
+    "conditional": {
+      "comment": "`if Cond {` and `} else if Cond {`. Keywords only where they lead a branch: `if = 1` and `if <- F()` are properties named if, as the parser reads them. The condition is a binding expression up to the `{`.",
+      "begin": "(?:^|(?<=[{};]))\\s*(?:(else)\\s+)?(if)\\b(?!\\s*(?:=(?!=)|<->|<-|->))",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.conditional.dui" },
+        "2": { "name": "keyword.control.conditional.dui" }
+      },
+      "end": "(\\{)|$",
+      "endCaptures": { "1": { "name": "punctuation.section.block.begin.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#expression" }
+      ]
+    },
+    "else": {
+      "match": "(?:^|(?<=[{};]))\\s*(else)\\b(?=\\s*(?:\\{|$|//))",
+      "captures": { "1": { "name": "keyword.control.conditional.dui" } }
+    },
     "component-line": {
-      "match": "^\\s*(\\+)\\s*([A-Za-z_/][\\w/.]*)",
+      "match": "(?:^|(?<=[{;]))\\s*(\\+)\\s*([A-Za-z_/][\\w/.]*)",
       "captures": {
         "1": { "name": "keyword.operator.component.dui" },
         "2": { "name": "entity.name.type.component.dui" }
       }
+    },
+    "fill-shorthand": {
+      "comment": "`@fill` alone, or with a weight: the shorthand for `@slot SizeRule = Fill` (and `@slot FillWeight = N`). Anything else after it -- `@fill Filler { }` -- is a node whose type a resource called fill names, and is left to the node header.",
+      "match": "(@fill)\\b(?:\\s+(\\d+(?:\\.\\d+)?))?(?=\\s*(?:$|[;}]|//|/\\*))",
+      "captures": {
+        "1": { "name": "keyword.control.directive.fill.dui" },
+        "2": { "name": "constant.numeric.dui" }
+      }
+    },
+    "slot-block": {
+      "comment": "`@slot { SizeRule = Fill  Padding = (0, 8, 0, 0) }` -- several slot lines at once, with the property syntax of a `+` block.",
+      "begin": "(@slot)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.directive.slot.dui" },
+        "2": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.block.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)(?!=)",
+          "beginCaptures": {
+            "1": { "name": "variable.other.property.slot.dui" },
+            "2": { "name": "keyword.operator.assignment.dui" }
+          },
+          "end": "(?=[;}])|(?=\\s+[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*\\s*(?:=(?!=)|<->|<-|->))|$",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#values" },
+            { "include": "#enum-value" }
+          ]
+        }
+      ]
     },
     "slot-property": {
       "begin": "(@slot)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)?",
@@ -103,7 +322,7 @@
         "2": { "name": "variable.other.property.slot.dui" },
         "3": { "name": "keyword.operator.assignment.dui" }
       },
-      "end": "$",
+      "end": "(?=[;}])|(?=\\s+[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*\\s*(?:=(?!=)|<->|<-|->))|$",
       "patterns": [
         { "include": "#comments" },
         { "include": "#values" },
@@ -125,6 +344,21 @@
         "3": { "name": "variable.other.dui" }
       }
     },
+    "emit-route": {
+      "comment": "`OnClick -> emit Picked(Index)`: raises an event this file declares, its arguments binding expressions. `emit` is the keyword only with an event name after it; `OnClick -> emit` alone still names a handler called emit, and is the event-route rule's.",
+      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*(emit)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "beginCaptures": {
+        "1": { "name": "variable.other.event.dui" },
+        "2": { "name": "keyword.operator.event-route.dui" },
+        "3": { "name": "keyword.control.emit.dui" },
+        "4": { "name": "entity.name.function.event.dui" }
+      },
+      "end": "(?=[;}])|(?=\\s+[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*\\s*(?:=(?!=)|<->|<-|->))|$",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#expression" }
+      ]
+    },
     "event-route": {
       "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
       "captures": {
@@ -134,12 +368,13 @@
       }
     },
     "binding": {
+      "comment": "Ends at the end of the line, a `;`, a `}`, or where the next property of a one-line block begins (`Label <- Item.Label  Count <- Item.Count`) -- the parser's StartsAnotherProperty, a name and then an operator.",
       "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<-)(?!>)",
       "beginCaptures": {
         "1": { "name": "variable.other.property.dui" },
         "2": { "name": "keyword.operator.binding.dui" }
       },
-      "end": "$",
+      "end": "(?=[;}])|(?=\\s+[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*\\s*(?:=(?!=)|<->|<-|->))|$",
       "patterns": [
         { "include": "#comments" },
         { "include": "#expression" }
@@ -150,6 +385,7 @@
         { "name": "string.quoted.double.dui", "begin": "\"", "end": "\"", "patterns": [ { "name": "constant.character.escape.dui", "match": "\\\\." } ] },
         { "name": "constant.numeric.dui", "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" },
         { "name": "constant.language.boolean.dui", "match": "\\b(true|false)\\b" },
+        { "include": "#resource-ref" },
         {
           "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(\\()",
           "captures": {
@@ -162,14 +398,15 @@
       ]
     },
     "property-assignment": {
-      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)",
+      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(=)(?!=)",
       "beginCaptures": {
         "1": { "name": "variable.other.property.dui" },
         "2": { "name": "keyword.operator.assignment.dui" }
       },
-      "end": "$",
+      "end": "(?=[;}])|(?=\\s+[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*\\s*(?:=(?!=)|<->|<-|->))|$",
       "patterns": [
         { "include": "#comments" },
+        { "include": "#key-override" },
         { "include": "#values" },
         { "include": "#enum-value" }
       ]
@@ -179,9 +416,10 @@
       "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*"
     },
     "node-header": {
-      "match": "^\\s*([A-Za-z_/][\\w/.]*)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*))?\\s*\\{?",
+      "comment": "`Type Id`, then `(was: Old)` and `: Style` in either order. The type is a tag, a container (`VerticalBox`), an alias (`Row`, `nier.Row`), `@Name`, a registry tag (`Native.Button`) or a path. With no id, a `{` or a style clause must follow (`HorizontalBox {`, `Text : Caption {`) -- a type alone on a line is the DUI2004 it always was. Also after a `{` or `;`, so a one-line body's child (`RectBlock Key : Cap { Text Label : Caption {} }`) is a node too.",
+      "match": "(?:^|(?<=[{;]))\\s*(/[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)|(?=\\s*(?:\\{|:\\s*[A-Za-z_\\u00A0-\\uFFFF])))\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?",
       "captures": {
-        "1": { "name": "entity.name.tag.dui" },
+        "1": { "name": "entity.name.tag.dui", "patterns": [ { "include": "#qualifier" } ] },
         "2": { "name": "entity.name.section.id.dui" },
         "3": { "name": "punctuation.section.parens.begin.dui" },
         "4": { "name": "keyword.control.was.dui" },
@@ -189,15 +427,26 @@
         "6": { "name": "entity.name.section.oldid.dui" },
         "7": { "name": "punctuation.section.parens.end.dui" },
         "8": { "name": "punctuation.separator.style.dui" },
-        "9": { "name": "entity.other.inherited-class.style.dui" }
+        "9": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] },
+        "10": { "name": "punctuation.section.parens.begin.dui" },
+        "11": { "name": "keyword.control.was.dui" },
+        "12": { "name": "punctuation.separator.dui" },
+        "13": { "name": "entity.name.section.oldid.dui" },
+        "14": { "name": "punctuation.section.parens.end.dui" }
       }
+    },
+    "resource-ref": {
+      "comment": "`@Accent`, or `@nier.Ink` for one a namespace brought in.",
+      "match": "@[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*",
+      "name": "variable.other.constant.resource-ref.dui",
+      "captures": { "0": { "patterns": [ { "include": "#qualifier" } ] } }
     },
     "values": {
       "patterns": [
         { "name": "string.quoted.double.dui", "begin": "\"", "end": "\"", "patterns": [ { "name": "constant.character.escape.dui", "match": "\\\\." } ] },
         { "name": "constant.other.color.dui", "match": "#[0-9A-Fa-f]{3,8}\\b" },
         { "name": "constant.numeric.dui", "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" },
-        { "name": "variable.other.constant.resource-ref.dui", "match": "@[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*" },
+        { "include": "#resource-ref" },
         { "name": "constant.language.boolean.dui", "match": "\\b(true|false|None)\\b" },
         { "name": "entity.name.namespace.assetpath.dui", "match": "/[\\w/.]+" }
       ]

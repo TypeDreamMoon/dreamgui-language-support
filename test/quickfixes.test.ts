@@ -7,7 +7,9 @@ import * as assert from 'node:assert/strict';
 import { buildStructure } from '../src/core/structure';
 import { planDeclareResource, planCreateStyle, applyPlan } from '../src/core/quickfixes';
 import { WorkspaceIndex } from '../src/core/workspaceIndex';
-import { filesDeclaring, planUseSpelling, planUseInsertion, useStyleOf } from '../src/core/useFix';
+import {
+    filesDeclaring, planUseSpelling, planUseInsertion, useStyleOf, componentFilesNamed,
+} from '../src/core/useFix';
 
 test('declaring a resource into an existing block', () => {
     const source = 'class /Game/UI/WBP_X\n\nresources {\n    Number Gap = 8\n}\n\nWidget Root {\n    A = @Accent\n}\n';
@@ -185,4 +187,44 @@ test('with neither, the import lands under the header comment and above the firs
     assert.deepEqual(built.imports.map((entry) => entry.path), ['Styles/Common.dui']);
     assert.ok(fixed.startsWith('// What this file is.\n// Second line.\n\nuse "'));
     assert.ok(fixed.indexOf('use "') < fixed.indexOf('style Local'));
+});
+
+// ---- an unknown type: use "…" as Name, when one component file is the type -----------------------
+
+const COMPONENT_FILE = 'class /Game/UI/WBP_Row\n\nWidget Root {\n}\n';
+
+test('a component file is found by the type it would be named as, prefixed family spelling included', () => {
+    const index = indexWith({
+        'I:/Proj/DUI/UI/Components/NieR_Row.dui': COMPONENT_FILE,
+        'I:/Proj/DUI/UI/Components/NieR_Tab.dui': COMPONENT_FILE,
+        // A library of that name is no component: `as Row` on it would open a namespace.
+        'I:/Proj/DUI/UI/Row_Library/Common_Row.dui': LIBRARY,
+    });
+    assert.deepEqual(componentFilesNamed(index, 'Row'), ['I:/Proj/DUI/UI/Components/NieR_Row.dui']);
+    assert.deepEqual(componentFilesNamed(index, 'row'), ['I:/Proj/DUI/UI/Components/NieR_Row.dui']);
+    assert.deepEqual(componentFilesNamed(index, 'Header'), []);
+    // Not a name an alias could be.
+    assert.deepEqual(componentFilesNamed(index, 'nier.Row'), []);
+});
+
+test('an exact file name wins over a prefixed one, and two candidates stay two', () => {
+    const index = indexWith({
+        'I:/Proj/DUI/UI/Row.dui': COMPONENT_FILE,
+        'I:/Proj/DUI/UI/NieR_Row.dui': COMPONENT_FILE,
+        'I:/Proj/DUI/UI/A/Tab_Tab.dui': COMPONENT_FILE,
+        'I:/Proj/DUI/UI/B/X_Tab.dui': COMPONENT_FILE,
+    });
+    assert.deepEqual(componentFilesNamed(index, 'Row'), ['I:/Proj/DUI/UI/Row.dui']);
+    assert.equal(componentFilesNamed(index, 'Tab').length, 2);
+});
+
+test('the alias import lands like any use, with its as, and the file then knows the name', () => {
+    const source = 'class /Game/UI/WBP_Screen\n\nuse "UI/Common.dui"\n\nWidget Root {\n    Row Audio {}\n}\n';
+    const fixed = applyPlan(source, planUseInsertion(buildStructure(source), 'UI/Components/NieR_Row.dui',
+        source.length, 'Row'));
+    assert.ok(fixed.includes('use "UI/Common.dui"\nuse "UI/Components/NieR_Row.dui" as Row\n'));
+    const built = buildStructure(fixed);
+    assert.deepEqual(built.diagnostics, []);
+    assert.deepEqual(built.imports.map((entry) => [entry.path, entry.alias]),
+        [['UI/Common.dui', undefined], ['UI/Components/NieR_Row.dui', 'Row']]);
 });

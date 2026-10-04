@@ -100,5 +100,148 @@
     "prefix": "use",
     "body": ["use \"${1:Styles/Common.dui}\""],
     "description": "Pull another file's styles and resources into this one's lookup"
+  },
+  "Use a component or a library by a name": {
+    "prefix": "use-as",
+    "body": ["use \"${1:Components/Row.dui}\" as ${2:Row}"],
+    "description": "A file with a root becomes a node type (Row Audio { }); a library becomes a namespace (: ui.Label, @ui.Ink, ui.Row)"
+  },
+  "Use a class by a name": {
+    "prefix": "use-class",
+    "body": ["use ${1:/Game/UI/WBP_Row} as ${2:Row}"],
+    "description": "A widget class with no .dui behind it, written as a node type by the name after as"
+  },
+  "Component file": {
+    "prefix": "dui-component",
+    "body": [
+      "// ${TM_FILENAME}",
+      "class ${1:/Game/UI/WBP_${TM_FILENAME_BASE}}",
+      "",
+      "props {",
+      "    Text   ${2:Label}",
+      "    Number ${3:Index} = 0",
+      "}",
+      "events {",
+      "    ${4:Picked}(Number ${3:Index})",
+      "}",
+      "",
+      "HorizontalBox Root {",
+      "    Spacing = ${5:12}",
+      "    + UIButton { OnClick -> emit ${4:Picked}(${3:Index}) }",
+      "",
+      "    Text ${2:Label}Text {",
+      "        Text <- ${2:Label}",
+      "        @fill",
+      "    }",
+      "    slot ${6:Content} default",
+      "    $0",
+      "}"
+    ],
+    "description": "A component written in .dui alone: what its hosts set (props), what they hear (events, raised with emit), and the slot nested content goes to"
+  },
+  "Props block": {
+    "prefix": "props",
+    "body": [
+      "props {",
+      "    ${1|Text,String,Number,Integer,Bool,Color,Vector2,Asset,Class|} ${2:Label}",
+      "    $0",
+      "}"
+    ],
+    "description": "Properties this file's class declares: Blueprint variables a host sets (Label = \"…\") or binds (Label <- GetName())"
+  },
+  "Events block": {
+    "prefix": "events",
+    "body": [
+      "events {",
+      "    ${1:Picked}(${2:Number} ${3:Index})",
+      "    $0",
+      "}"
+    ],
+    "description": "Event dispatchers this file's class raises with emit; a host routes them like any event"
+  },
+  "Emit route": {
+    "prefix": "emit",
+    "body": ["${1:OnClicked} -> emit ${2:Picked}(${3:Index})"],
+    "description": "Raise an event this file's events block declares; the arguments are binding expressions"
+  },
+  "Shown binding": {
+    "prefix": "shown",
+    "body": ["Shown <- ${1:HasDetail}()"],
+    "description": "Visibility as a yes or no: true is Visible, false is Collapsed"
+  },
+  "If": {
+    "prefix": "if",
+    "body": [
+      "if ${1:HasSave}() {",
+      "    $0",
+      "}"
+    ],
+    "description": "Widgets shown only while the condition holds; a hidden branch is collapsed, not destroyed"
+  },
+  "If / else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:HasSave}() {",
+      "    $2",
+      "} else {",
+      "    $0",
+      "}"
+    ],
+    "description": "One branch's widgets at a time; each gets a Shown bound to its branch"
+  },
+  "For list": {
+    "prefix": "for",
+    "body": [
+      "for ${1:Item} in ${2:GetItems}() {",
+      "    ${3:Text} {",
+      "        ${4:Text} <- ${1:Item}.${5:Label}",
+      "    }",
+      "}"
+    ],
+    "description": "One copy of the template per item, inside the panel this is written in; the body is one widget, Item.Member binds per copy"
+  },
+  "Slot declaration": {
+    "prefix": "slot-default",
+    "body": [
+      "slot ${1:Content} default {",
+      "    + ${2:VerticalBox} { Spacing = ${3:8} }",
+      "    @fill",
+      "}"
+    ],
+    "description": "A hole in this component that a host's nested content goes to; the block lays it out, and holds no widgets"
+  },
+  "Slot fill": {
+    "prefix": "slot-fill",
+    "body": [
+      "slot ${1:Detail} {",
+      "    ${2:Text} ${3:Note} { $0 }",
+      "}"
+    ],
+    "description": "Inside a component instance: fill the slot of that name with widgets"
+  },
+  "Slot lines block": {
+    "prefix": "slotblock",
+    "body": ["@slot { ${1:HorizontalAlignment} = ${2:Fill}  ${3:Padding} = ${4:(0, 8, 0, 0)} }"],
+    "description": "Several of this node's panel-slot lines at once"
+  },
+  "Vertical box": {
+    "prefix": "vbox",
+    "body": [
+      "VerticalBox ${1:Column} {",
+      "    Spacing = ${2:8}",
+      "    $0",
+      "}"
+    ],
+    "description": "A layout container as the node's type: its lines set the container's properties as well as the widget's"
+  },
+  "Horizontal box": {
+    "prefix": "hbox",
+    "body": [
+      "HorizontalBox {",
+      "    Spacing = ${1:8}",
+      "    $0",
+      "}"
+    ],
+    "description": "An unnamed layout container: nothing refers to it by name, so it needs no id"
   }
 }

@@ -4,13 +4,17 @@
  * -- and the second is offered first when the workspace can point at exactly one such file.
  * Importing what exists beats writing a second declaration that will shadow it.
  *
+ * An unknown node type (DUI3003) gets one answer, and only when it is unambiguous: `use "…" as Row`
+ * naming the one component file whose name is the type (`Row.dui`, or `NieR_Row.dui` in a family
+ * that prefixes its files).
+ *
  * All plans are pure insertions computed in core; nothing existing moves, and nothing here
  * decides anything the compiler decides.
  */
 import * as vscode from 'vscode';
 import { buildModel } from './docmodel';
 import { planDeclareResource, planCreateStyle, EditPlan } from './core/quickfixes';
-import { filesDeclaring, planUseInsertion, planUseSpelling } from './core/useFix';
+import { filesDeclaring, planUseInsertion, planUseSpelling, componentFilesNamed } from './core/useFix';
 import { WorkspaceIndexHost } from './workspace';
 
 export function registerQuickfixes(context: vscode.ExtensionContext, host?: WorkspaceIndexHost): void {
@@ -59,8 +63,45 @@ export function registerQuickfixes(context: vscode.ExtensionContext, host?: Work
                     diagnostic, true);
             };
 
+            /** `use "Components/Row.dui" as Row` for a type nothing names, when one component file is the type. */
+            const componentAction = (typeName: string, diagnostic: vscode.Diagnostic): vscode.CodeAction | undefined => {
+                if (!host) {
+                    return undefined;
+                }
+                const candidates = componentFilesNamed(host.index, typeName)
+                    .filter((file) => file !== document.uri.fsPath);
+                if (candidates.length !== 1) {
+                    return undefined;
+                }
+                const spelling = planUseSpelling({
+                    documentFile: document.uri.fsPath,
+                    targetFile: candidates[0],
+                    // The file's spellings, for its house style -- minus any that already reach the component: a
+                    // plain `use` of it names no type, and it is the alias that is missing, not the import.
+                    existing: model.structure.imports.map((directive) => directive.path).filter((spelling) =>
+                        !host.index.resolveImportSpelling(spelling).includes(candidates[0])),
+                    resolve: (candidate) => host.index.resolveImportSpelling(candidate),
+                });
+                if (!spelling) {
+                    return undefined;
+                }
+                return toAction(`Add use "${spelling}" as ${typeName}`,
+                    planUseInsertion(model.structure, spelling, document.getText().length, typeName),
+                    diagnostic, true);
+            };
+
             for (const diagnostic of actionContext.diagnostics) {
-                if (diagnostic.code === 'DUI4007') {
+                if (diagnostic.code === 'DUI3003') {
+                    // The range covers the type as written (the compiler's may be a bare position: then the word
+                    // there). Only a plain name can become an alias; componentFilesNamed refuses anything else.
+                    const written = document.getText(diagnostic.range).trim();
+                    const word = document.getWordRangeAtPosition(diagnostic.range.start);
+                    const typeName = written.length > 0 ? written : word ? document.getText(word) : '';
+                    const importer = componentAction(typeName, diagnostic);
+                    if (importer) {
+                        actions.push(importer);
+                    }
+                } else if (diagnostic.code === 'DUI4007') {
                     // The range covers '@Name'; the name is the text minus its '@'.
                     const name = document.getText(diagnostic.range).replace(/^@/, '');
                     if (!name) {

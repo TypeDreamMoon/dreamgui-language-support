@@ -14,9 +14,10 @@
  * built skeleton says the same thing it said before the refactor.
  */
 
-import { buildStructure, StructNode, StyleDecl, PropertyStmt } from './structure';
+import { buildStructure, StructNode, StyleDecl, PropertyStmt, StructComponent } from './structure';
 import { RenameEdit, isValidName } from './rename';
 import { planResourceEntryInsertion, planStyleInsertion } from './quickfixes';
+import { tagEndOf } from './componentIntel';
 
 export type Built = ReturnType<typeof buildStructure>;
 export type RefactorPlan = { edits: RenameEdit[] } | { error: string };
@@ -50,19 +51,19 @@ const LITERAL_TYPES: Record<string, ExtractableLiteral['resourceType']> = {
 /** Every offset span sitting in a single-value position of some property statement. */
 function valueSpans(built: Built): { start: number; end: number }[] {
     const out: { start: number; end: number }[] = [];
-    for (const node of allNodes(built)) {
-        for (const stmt of node.properties) {
-            if (stmt.op === 'equals' && stmt.valueStart !== undefined && stmt.valueEnd !== undefined) {
-                out.push({ start: stmt.valueStart, end: stmt.valueEnd });
-            }
+    // `@fill 2` is no value position: its weight is a number by grammar, and `@fill @Weight` is not a line the
+    // parser reads. Every other statement with an '=' is, slot lines included.
+    const take = (stmt: PropertyStmt): void => {
+        if (stmt.op === 'equals' && stmt.shorthand === undefined
+            && stmt.valueStart !== undefined && stmt.valueEnd !== undefined) {
+            out.push({ start: stmt.valueStart, end: stmt.valueEnd });
         }
+    };
+    for (const node of allNodes(built)) {
+        node.properties.forEach(take);
     }
     for (const style of built.styles) {
-        for (const stmt of style.properties) {
-            if (stmt.op === 'equals' && stmt.valueStart !== undefined && stmt.valueEnd !== undefined) {
-                out.push({ start: stmt.valueStart, end: stmt.valueEnd });
-            }
-        }
+        style.properties.forEach(take);
     }
     return out;
 }
@@ -139,12 +140,13 @@ export function planExtractStyle(built: Built, source: string, selectionStart: n
         return { error: `样式 '${styleName}' 已经存在。` };
     }
 
-    // The innermost node whose body contains the selection.
+    // The innermost block whose body contains the selection -- and it has to be a NODE's: an `if` arm and a loop
+    // body hold widgets only, and a slot's block lays out a hole whose clause sits after `default`.
     const owner = allNodes(built)
         .filter((node) => node.bodyStart !== undefined && node.bodyEnd !== undefined
             && node.bodyStart <= selectionStart && selectionEnd <= node.bodyEnd)
         .sort((a, b) => b.bodyStart! - a.bodyStart!)[0];
-    if (!owner) {
+    if (!owner || owner.kind !== 'node') {
         return { error: '选区不在任何节点体内。' };
     }
     if (owner.styleName) {
@@ -168,7 +170,11 @@ export function planExtractStyle(built: Built, source: string, selectionStart: n
     const insertion = planStyleInsertion(built, `style ${styleName} {\n${body}\n}`, source.length);
     edits.push({ start: insertion.offset, end: insertion.offset, newText: insertion.text });
 
-    const clauseAnchor = owner.wasEnd ?? (owner.idStart !== undefined ? owner.idStart + owner.id.length : undefined);
+    // After the id (or its `(was:)`), where a style clause goes. A node with no id takes the clause straight after
+    // its type -- `HorizontalBox : Row {` is one of the two shapes an unnamed node may have.
+    const clauseAnchor = owner.wasEnd
+        ?? (owner.idStart !== undefined ? owner.idStart + owner.id.length
+            : owner.anonymous ? tagEndOf(owner) : undefined);
     if (clauseAnchor === undefined) {
         return { error: '节点没有 id,先给它一个名字。' };
     }
@@ -198,12 +204,60 @@ export function wornStyleAt(built: Built, offset: number): StructNode | undefine
         && offset >= node.styleNameStart && offset <= node.styleNameStart + node.styleName.length);
 }
 
+
+/**
+ * What a style's slot line says, written back as the line it was: `@slot Padding = (0, 8, 0, 0)` -- a line of an
+ * `@slot { … }` block becomes one such line each, which means the same -- or the `@fill` shorthand as written.
+ */
+function slotLineText(source: string, stmt: PropertyStmt): string {
+    if (stmt.shorthand === 'fill') {
+        const lineStart = source.lastIndexOf('\n', Math.max(0, stmt.start - 1)) + 1;
+        const at = source.lastIndexOf('@fill', Math.max(stmt.start, stmt.end));
+        if (at >= lineStart) {
+            return source.slice(at, Math.max(stmt.end, at + '@fill'.length)).trim();
+        }
+        return '@fill';
+    }
+    const text = source.slice(stmt.start, stmt.end);
+    // A slot statement's span starts at its property path; the directive sits before it.
+    return text.startsWith('@') ? text : `@slot ${text}`;
+}
+
+/** `@fill` is `@slot SizeRule = Fill`: one key, so a node's own SizeRule line overrides the style's shorthand. */
+const slotKey = (stmt: PropertyStmt): string => (stmt.shorthand === 'fill' ? 'sizerule' : fold(stmt.path));
+
+/** A `+ Component { … }` block of a style, from its '+' to its '}', re-indented to sit in the node's body. */
+function componentText(source: string, component: StructComponent, indent: string): string {
+    const plus = source.lastIndexOf('+', component.start);
+    const start = plus >= 0 ? plus : component.start;
+    const end = component.bodyEnd !== undefined ? component.bodyEnd + 1 : component.start + component.name.length;
+    const lineStart = source.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const ownIndent = /^[ \t]*/.exec(source.slice(lineStart, start))?.[0] ?? '';
+    return source.slice(start, end).split('\n')
+        .map((line, index) => (index === 0 ? line : indent + (line.startsWith(ownIndent) ? line.slice(ownIndent.length) : line.trimStart())))
+        .join('\n');
+}
+
+/**
+ * Inline the worn chain into the node: base first, derived overriding, the node's own lines winning over all of it.
+ * A style carries three kinds of line now, and each lands as the kind it is:
+ *
+ *   - widget lines (`FontSize = 18`), minus the paths the node sets itself;
+ *   - slot lines (`@slot Padding = …`, `@fill`), minus the slot properties the node sets itself -- written as `@slot`
+ *     lines, which is what they were; a style line copied without its directive would set the WIDGET's property;
+ *   - `+ Component { … }` blocks, verbatim. A component the node (or another style of the chain) also writes is ONE
+ *     object to the compiler -- the style's values first, the node's after -- and two blocks in one node would be two
+ *     writers of one object; that merge is the author's to make, so it is refused rather than guessed.
+ */
 export function planInlineStyle(built: Built, source: string, node: StructNode): RefactorPlan {
     if (!node.styleName || node.styleNameStart === undefined) {
         return { error: '这个节点没有穿样式。' };
     }
     if (node.bodyStart === undefined || node.bodyEnd === undefined) {
         return { error: '节点没有块,没地方放内联出来的属性。' };
+    }
+    if (node.styleName.includes('.')) {
+        return { error: `样式 '${node.styleName}' 来自命名空间库,只能内联本文件声明的样式。` };
     }
 
     // Walk the chain, worn style first. Refuse what the builder refuses.
@@ -221,37 +275,63 @@ export function planInlineStyle(built: Built, source: string, node: StructNode):
         }
         const base: StyleDecl | undefined = built.styles.find((style) => fold(style.name) === fold(link!.base!));
         if (!base) {
-            return { error: `样式 '${link.name}' 的基 '${link.base}' 没有声明,先修 DUI3004。` };
+            return { error: `样式 '${link.name}' 的基 '${link.base}' 本文件没有声明(DUI3004,或由 use 带进来),无法内联整条链。` };
         }
         link = base;
     }
     if (chain.length === 0) {
-        return { error: `样式 '${node.styleName}' 没有声明。` };
+        return { error: `样式 '${node.styleName}' 不在本文件里声明(可能由 use 带进来),只能内联本文件声明的样式。` };
     }
 
-    // Base first, derived overriding: iterate the chain from its root, later writes win. Then the
-    // node's own lines win over all of it -- drop what the node already sets.
+    // Components first, as the builder applies them; one per class across the chain and the node.
+    const components: StructComponent[] = [];
+    const componentNames = new Set(node.components.map((component) => fold(component.name)));
+    for (let index = chain.length - 1; index >= 0; index--) {
+        for (const component of chain[index].components ?? []) {
+            if (componentNames.has(fold(component.name))) {
+                return { error: `样式里的 + ${component.name} 和节点(或链上另一个样式)的 + ${component.name} 是同一个对象,`
+                    + '内联会把它拆成两个块 —— 先手动合并。' };
+            }
+            componentNames.add(fold(component.name));
+            components.push(component);
+        }
+    }
+
     const effective = new Map<string, PropertyStmt>();
+    const slotLines = new Map<string, PropertyStmt>();
     for (let index = chain.length - 1; index >= 0; index--) {
         for (const stmt of chain[index].properties) {
-            if (stmt.op === 'equals') {
+            if (stmt.op !== 'equals') {
+                continue;
+            }
+            if (stmt.isSlot) {
+                slotLines.set(slotKey(stmt), stmt);
+            } else {
                 effective.set(fold(stmt.path), stmt);
             }
         }
     }
     for (const own of node.properties) {
-        if (!own.isSlot && own.op === 'equals') {
+        if (own.op !== 'equals') {
+            continue;
+        }
+        if (own.isSlot) {
+            slotLines.delete(slotKey(own));
+        } else {
             effective.delete(fold(own.path));
         }
     }
 
     const edits: RenameEdit[] = [];
-    if (effective.size > 0) {
+    if (components.length + effective.size + slotLines.size > 0) {
         const headerLineStart = source.lastIndexOf('\n', node.start - 1) + 1;
         const headerIndent = /^[ \t]*/.exec(source.slice(headerLineStart, node.start))?.[0] ?? '';
         const indent = headerIndent + '    ';
-        const lines = [...effective.values()]
-            .map((stmt) => `${indent}${source.slice(stmt.start, stmt.end)}`);
+        const lines = [
+            ...components.map((component) => `${indent}${componentText(source, component, indent)}`),
+            ...[...effective.values()].map((stmt) => `${indent}${source.slice(stmt.start, stmt.end)}`),
+            ...[...slotLines.values()].map((stmt) => `${indent}${slotLineText(source, stmt)}`),
+        ];
 
         const bodyLineStart = source.lastIndexOf('\n', node.bodyStart - 1) + 1;
         const singleLineBlock = bodyLineStart <= headerLineStart;

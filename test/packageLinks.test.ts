@@ -89,3 +89,16 @@ test('a tag the workspace can trace to its declaring .dui yields no link', () =>
     // With no index host at hand nothing is claimed, so every span stays a link.
     assert.equal(linksToOffer(spans, () => false).length, 4);
 });
+
+test('a class named by use … as is a package path; a quoted .dui path is not one', () => {
+    const source = 'use /Game/UI/WBP_Slider as Slider\nuse "UI/Components/Row.dui" as Row\n\nWidget Root {\n    Slider S {}\n}\n';
+    assert.deepEqual(linksIn(source), [{ text: '/Game/UI/WBP_Slider', path: '/Game/UI/WBP_Slider' }]);
+    // When a .dui declares that class, F12 owns the click there, as it does on a nested tag.
+    const spans = packageLinkSpans(buildStructure(source).tokens, source);
+    assert.deepEqual(linksToOffer(spans, (path) => path === '/Game/UI/WBP_Slider'), []);
+});
+
+test('a props default is a package path; a namespaced resource reference is none', () => {
+    const source = 'props {\n    Asset Icon = /Game/UI/T_Icon\n}\nWidget Root {\n    Image I { Brush.ResourceObject = @ui.Icon }\n}\n';
+    assert.deepEqual(linksIn(source), [{ text: '/Game/UI/T_Icon', path: '/Game/UI/T_Icon' }]);
+});

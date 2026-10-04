@@ -130,8 +130,13 @@ function isHexDigit(code: number): boolean {
  * The identifier rule, copied from UDreamWidgetTree::SanitizeIdentifier via the compiler's lexer.
  * `> 0x7F` verbatim: CJK ids are ordinary in this language, and both sides judge per UTF-16 unit,
  * so the two implementations agree even about surrogate halves.
+ *
+ * Exported because the parser needs it a second time, for the id it makes for an unnamed node: the
+ * compiler's AssignAnonymousId turns every character of the type this rule refuses into '_', with
+ * this same function, and the made id is only the compiler's if the two agree character for
+ * character.
  */
-function isIdentifierChar(code: number): boolean {
+export function isIdentifierChar(code: number): boolean {
     return isDigit(code)
         || code === 0x5f /* _ */
         || (code >= 0x61 && code <= 0x7a)
@@ -158,6 +163,27 @@ export const RESERVED_WORDS: ReadonlySet<string> =
         // The timeline grammar's three, added with it: the compiler reserves them, so a node named
         // `timeline` is a DUI3002 there and must be one here too.
         'timeline', 'external', 'ease']);
+
+/**
+ * The words the language grew after files were written that use them as names -- and so keywords
+ * ONLY in the one position each leads, decided by a token or two of lookahead, and reserved nowhere:
+ *
+ *   `as`      after a `use` path;
+ *   `props`   `events` at the top of a file, and only with their '{' next;
+ *   `emit`    after `->`, and only with an event name next;
+ *   `if`      leading a node-body statement, before something a condition can begin with;
+ *   `else`    after an `if` block's '}', before '{' or `if`;
+ *   `default` among a `slot` declaration's clauses;
+ *   `fill`    after '@' at the head of a slot line, alone or before a weight.
+ *
+ * The compiler's own rule (the file comment of DreamUISourceFile.cpp): a grammar that grows must not
+ * take a working file away from its author, so `Text if { }`, `props = 2` and `else <- Other()` all
+ * still mean what they meant. Listed here for the editor features (colouring, completion), and kept
+ * apart from RESERVED_WORDS on purpose: putting one of these in that set would make `Text default`
+ * a DUI3002 the compiler does not raise.
+ */
+export const CONTEXTUAL_KEYWORDS: ReadonlySet<string> =
+    new Set(['as', 'props', 'events', 'emit', 'if', 'else', 'default', 'fill']);
 
 /**
  * `NAME_SIZE` from the engine's UnrealNames.h -- the one length rule this grammar has, and the

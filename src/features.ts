@@ -1,19 +1,33 @@
 /**
- * Completion, hover, outline and go-to-definition, all reading the same two sources: the plugin's
- * symbols file for what the LANGUAGE knows, the document model for what THIS FILE declares.
+ * Completion, hover and outline, all reading the same three sources: the plugin's symbols file for
+ * what the LANGUAGE knows, the document model for what THIS FILE declares, and the workspace index
+ * for what the file borrows -- the component aliases, namespaces, styles and resources its `use`
+ * lines bring in. Go-to-definition lives in navigation.ts, over the same core answers.
+ *
+ * Every judgement is in core (completionContext, componentIntel, symbolFacts); this file maps the
+ * answers onto vscode's item kinds and snippets.
  */
 import * as vscode from 'vscode';
 import { SymbolStore, PropertyInfo } from './symbols';
-import { buildModel, scopeAt } from './docmodel';
+import { buildModel, scopeAt, NodeScope, OutlineNode } from './docmodel';
 import { analyzeLine } from './core/completionContext';
+import { WorkspaceIndexHost } from './workspace';
+import { WorkspaceIndex } from './core/workspaceIndex';
+import {
+    borrowableNames, namespacesVisibleFrom, namespaceMembers, componentFacts, ComponentFacts, hoverAt,
+    anonymousNodeAt, propSignature, eventSignature, baseName,
+} from './core/componentIntel';
+import { tailsAfter } from './core/symbolFacts';
+import { PROP_TYPES, RESOURCE_TYPES, TOP_LEVEL_KEYWORDS } from './core/vocabulary';
 
-const TAG_ONLY_KEYWORDS = ['style', 'resources', 'slot', 'for', 'each'];
+/** Re-opens the suggest widget after an item that leaves the cursor where another choice is due (`emit `, `nier.`). */
+const RETRIGGER: vscode.Command = { command: 'editor.action.triggerSuggest', title: 'suggest' };
 
-function propertyItem(info: PropertyInfo): vscode.CompletionItem {
-    const item = new vscode.CompletionItem(info.name, vscode.CompletionItemKind.Property);
+function propertyItem(info: PropertyInfo, label = info.name): vscode.CompletionItem {
+    const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Property);
     item.detail = info.enum ?? info.type;
-    item.insertText = `${info.name} = `;
-    item.command = { command: 'editor.action.triggerSuggest', title: 'suggest' };
+    item.insertText = `${label} = `;
+    item.command = RETRIGGER;
     const documentation = new vscode.MarkdownString();
     if (info.tooltip) {
         documentation.appendMarkdown(info.tooltip);
@@ -27,173 +41,465 @@ function propertyItem(info: PropertyInfo): vscode.CompletionItem {
     return item;
 }
 
-export function registerFeatures(context: vscode.ExtensionContext, store: SymbolStore): void {
+function keywordItem(word: string, insert?: string | vscode.SnippetString, detail?: string): vscode.CompletionItem {
+    const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
+    if (insert !== undefined) {
+        item.insertText = insert;
+    }
+    if (detail) {
+        item.detail = detail;
+    }
+    return item;
+}
+
+/** A node of this type, with an id to fill in -- or to delete: a node with a block may leave its id out. */
+function nodeSnippet(name: string): vscode.SnippetString {
+    return new vscode.SnippetString(`${name} \${1:Id} {\n\t$0\n}`);
+}
+
+export function registerFeatures(context: vscode.ExtensionContext, store: SymbolStore, host?: WorkspaceIndexHost): void {
     const selector: vscode.DocumentSelector = { language: 'dui' };
+
+    /** The index, once the workspace sweep (and this file's own root) has been read. */
+    const indexFor = async (document: vscode.TextDocument): Promise<WorkspaceIndex | undefined> => {
+        if (!host) {
+            return undefined;
+        }
+        await host.ensureScannedFor(document.uri.scheme === 'file' ? document.uri.fsPath : undefined);
+        return host.index;
+    };
 
     // ---- completion ----------------------------------------------------------------------------
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider(selector, {
-        provideCompletionItems(document, position) {
+        async provideCompletionItems(document, position) {
             store.ensureLoadedFor(document.uri.fsPath);
             const line = document.lineAt(position.line).text.slice(0, position.character);
             const model = buildModel(document);
             const scope = scopeAt(document, position);
+            const file = document.uri.fsPath;
             const items: vscode.CompletionItem[] = [];
             const lineContext = analyzeLine(line);
+            const index = await indexFor(document);
+            const symbols = store.symbols;
+            const structure = model.structure;
 
-            // `@` in value position: this file's resources. ('@slot'/'@key' keep working: they are
-            // offered too, and the author picking a resource name was the whole point.)
-            if (lineContext.kind === 'resourceRef') {
+            const instance = (): ComponentFacts | undefined =>
+                index && scope?.kind === 'node' ? componentFacts(index, file, scope.name) : undefined;
+
+            const namespaceItems = (): vscode.CompletionItem[] => (index ? namespacesVisibleFrom(index, file) : [])
+                .map((namespace) => {
+                    const item = new vscode.CompletionItem(namespace.name, vscode.CompletionItemKind.Module);
+                    item.detail = `namespace — ${baseName(namespace.file)}`;
+                    item.insertText = `${namespace.name}.`;
+                    item.command = RETRIGGER;
+                    return item;
+                });
+
+            /** Resources by bare name: the file's own (with their values), then what plain imports bring. */
+            const resourceItems = (prefix: string): vscode.CompletionItem[] => {
+                const out: vscode.CompletionItem[] = [];
+                const seen = new Set<string>();
                 for (const entry of model.resources) {
-                    const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Constant);
+                    seen.add(entry.name.toLowerCase());
+                    const item = new vscode.CompletionItem(`${prefix}${entry.name}`, vscode.CompletionItemKind.Constant);
                     item.detail = `${entry.type} = ${entry.valueText}`;
-                    items.push(item);
+                    out.push(item);
                 }
-                if (scope?.kind === 'node' || scope?.kind === 'component') {
-                    const slot = new vscode.CompletionItem('slot', vscode.CompletionItemKind.Keyword);
-                    slot.insertText = 'slot ';
-                    items.push(slot);
+                for (const entry of index ? borrowableNames(index, file, 'resource') : []) {
+                    if (seen.has(entry.name.toLowerCase())) {
+                        continue;
+                    }
+                    const item = new vscode.CompletionItem(`${prefix}${entry.name}`, vscode.CompletionItemKind.Constant);
+                    item.detail = `${entry.type ?? 'resource'} — ${baseName(entry.file)}`;
+                    out.push(item);
                 }
-                return items;
+                return out;
+            };
+
+            /** Every node type this file can write: tags, containers, registry widgets, aliases, namespaces. */
+            const nodeTypeItems = (sortPrefix = ''): vscode.CompletionItem[] => {
+                const out: vscode.CompletionItem[] = [];
+                for (const type of store.nodeTypes()) {
+                    const item = new vscode.CompletionItem(type.name,
+                        type.kind === 'container' ? vscode.CompletionItemKind.Folder : vscode.CompletionItemKind.Struct);
+                    item.detail = type.kind;
+                    item.insertText = nodeSnippet(type.name);
+                    item.sortText = `${sortPrefix}${type.name}`;
+                    out.push(item);
+                }
+                for (const alias of index ? index.aliasesVisibleFrom(file) : []) {
+                    const item = new vscode.CompletionItem(alias.name, vscode.CompletionItemKind.Class);
+                    item.detail = `component — ${alias.target}`;
+                    item.insertText = nodeSnippet(alias.name);
+                    item.sortText = `${sortPrefix}${alias.name}`;
+                    out.push(item);
+                }
+                for (const item of namespaceItems()) {
+                    item.sortText = `${sortPrefix}${item.label as string}`;
+                    out.push(item);
+                }
+                return out;
+            };
+
+            /** The property face a statement in this scope can name. */
+            const propertyFace = (target: NodeScope | undefined): PropertyInfo[] => {
+                if (target?.kind === 'component') {
+                    return store.componentInfo(target.name)?.properties ?? [];
+                }
+                if (target?.kind === 'style') {
+                    return store.propertiesForStyle();
+                }
+                if (target?.kind === 'slotLines') {
+                    return symbols?.slotProperties ?? [];
+                }
+                return store.propertiesForTag(target?.kind === 'node' ? target.name : undefined);
+            };
+
+            switch (lineContext.kind) {
+                case 'resourceRef': {
+                    // `@nier.▌`: the library's resources, by the part after the dot.
+                    if (lineContext.namespace !== undefined) {
+                        for (const entry of index ? namespaceMembers(index, file, lineContext.namespace, 'resource') : []) {
+                            const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Constant);
+                            item.detail = `${entry.type ?? 'resource'} — ${lineContext.namespace} (${baseName(entry.file)})`;
+                            items.push(item);
+                        }
+                        return items;
+                    }
+                    items.push(...resourceItems(''), ...namespaceItems());
+                    // `Text = "OK" @key("Dialog.Confirm")`: the key a string is localized under.
+                    if (/"\s*@[\w -￿]*$/u.test(line)) {
+                        items.push(keywordItem('key', new vscode.SnippetString('key("${1:Key}")'),
+                            'the localization key of this string'));
+                    }
+                    return items;
+                }
+
+                case 'annotation': {
+                    if (scope?.kind === 'node' || scope?.kind === 'style' || scope?.kind === 'branch') {
+                        if (scope.kind !== 'branch') {
+                            items.push(keywordItem('slot', 'slot ', 'a panel-slot line: @slot Name = Value'));
+                            items.push(keywordItem('fill', 'fill', '@slot SizeRule = Fill (@fill 2: and FillWeight = 2)'));
+                        }
+                    }
+                    // `@Row Audio { … }`: an Asset resource naming a widget class is a node type too.
+                    if (scope?.kind !== 'style' && scope?.kind !== 'component' && scope?.kind !== 'slotLines') {
+                        for (const entry of model.resources.filter((resource) => resource.type === 'Asset')) {
+                            const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Class);
+                            item.detail = `Asset = ${entry.valueText}`;
+                            item.insertText = nodeSnippet(entry.name);
+                            items.push(item);
+                        }
+                    }
+                    return items;
+                }
+
+                case 'value': {
+                    // After '=': the value. Enum values when the property names an enum; booleans; resources.
+                    // A decimal point mid-number is no place for a list.
+                    if (/\d\.$/u.test(line)) {
+                        return items;
+                    }
+                    const isSlot = lineContext.isSlot || scope?.kind === 'slotLines';
+                    const list = isSlot ? symbols?.slotProperties ?? [] : propertyFace(scope);
+                    const info = store.findProperty(list, lineContext.property);
+                    for (const value of store.enumValues(info?.enum)) {
+                        items.push(new vscode.CompletionItem(value, vscode.CompletionItemKind.EnumMember));
+                    }
+                    const prop = instance()?.summary?.props.find(
+                        (entry) => entry.name.toLowerCase() === lineContext.property.toLowerCase());
+                    if (info?.type === 'bool' || prop?.type === 'Bool') {
+                        items.push(new vscode.CompletionItem('true', vscode.CompletionItemKind.Value));
+                        items.push(new vscode.CompletionItem('false', vscode.CompletionItemKind.Value));
+                    }
+                    items.push(...resourceItems('@'));
+                    return items;
+                }
+
+                case 'componentName': {
+                    // After '+': components, from the compiler's own resolvable set.
+                    for (const [name, info] of Object.entries(symbols?.components ?? {})) {
+                        const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Class);
+                        item.detail = info.class;
+                        item.insertText = new vscode.SnippetString(`${name} {\n\t$0\n}`);
+                        items.push(item);
+                    }
+                    return items;
+                }
+
+                case 'slotPropertyName': {
+                    for (const info of symbols?.slotProperties ?? []) {
+                        items.push(propertyItem(info));
+                    }
+                    return items;
+                }
+
+                case 'styleRef': {
+                    if (lineContext.namespace !== undefined) {
+                        for (const entry of index ? namespaceMembers(index, file, lineContext.namespace, 'style') : []) {
+                            const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Color);
+                            item.detail = `style — ${lineContext.namespace} (${baseName(entry.file)})`;
+                            items.push(item);
+                        }
+                        return items;
+                    }
+                    const seen = new Set<string>();
+                    for (const style of model.styles) {
+                        seen.add(style.name.toLowerCase());
+                        items.push(new vscode.CompletionItem(style.name, vscode.CompletionItemKind.Color));
+                    }
+                    for (const style of index ? borrowableNames(index, file, 'style') : []) {
+                        if (!seen.has(style.name.toLowerCase())) {
+                            const item = new vscode.CompletionItem(style.name, vscode.CompletionItemKind.Color);
+                            item.detail = `style — ${baseName(style.file)}`;
+                            items.push(item);
+                        }
+                    }
+                    items.push(...namespaceItems());
+                    return items;
+                }
+
+                case 'expression': {
+                    // `Item.▌` is a member run, and bindingIntel answers it from the loop's item type.
+                    if (/[\w -￿]\.[\w -￿]*$/u.test(line)) {
+                        return items;
+                    }
+                    // The file's props are variables of its class: a binding reads them like any other (`<-`), a
+                    // condition and a loop source too. A prop has no setter, so `<->` cannot mirror one.
+                    if (lineContext.op !== '<->') {
+                        for (const prop of structure.props ?? []) {
+                            const item = new vscode.CompletionItem(prop.name, vscode.CompletionItemKind.Variable);
+                            item.detail = `prop — ${propSignature(prop)}`;
+                            items.push(item);
+                        }
+                    }
+                    if (lineContext.op !== '<->' && lineContext.op !== 'in') {
+                        items.push(...resourceItems('@'));
+                        items.push(new vscode.CompletionItem('true', vscode.CompletionItemKind.Value));
+                        items.push(new vscode.CompletionItem('false', vscode.CompletionItemKind.Value));
+                    }
+                    return items;
+                }
+
+                case 'route': {
+                    // The handlers are the class's, and bridgeCompletion asks the editor for them; `emit` is the
+                    // language's own answer, and needs nothing but this file's `events`.
+                    const emit = keywordItem('emit', 'emit ', 'raise an event this file declares');
+                    emit.command = RETRIGGER;
+                    items.push(emit);
+                    return items;
+                }
+
+                case 'emitTarget': {
+                    for (const event of structure.events ?? []) {
+                        const item = new vscode.CompletionItem(event.name, vscode.CompletionItemKind.Event);
+                        item.detail = eventSignature(event);
+                        item.insertText = event.params.length === 0 ? event.name : new vscode.SnippetString(
+                            `${event.name}(${event.params.map((param, at) => `\${${at + 1}:${param.name}}`).join(', ')})`);
+                        items.push(item);
+                    }
+                    return items;
+                }
+
+                case 'keyword':
+                    return lineContext.words.map((word) => keywordItem(word, `${word} `));
+
+                case 'slotName': {
+                    // Inside an instance, the slots its component declares, to fill; elsewhere a new slot's name.
+                    for (const slot of instance()?.summary?.slots ?? []) {
+                        const item = new vscode.CompletionItem(slot.name, vscode.CompletionItemKind.Field);
+                        item.detail = slot.isDefault ? 'slot (default — nesting fills it too)' : 'slot';
+                        item.insertText = new vscode.SnippetString(`${slot.name} {\n\t$0\n}`);
+                        items.push(item);
+                    }
+                    return items;
+                }
+
+                case 'eventParam': {
+                    if (scope?.kind === 'events' && lineContext.position === 'type') {
+                        for (const type of symbols?.propTypes ?? PROP_TYPES) {
+                            items.push(keywordItem(type, `${type} `, 'parameter type'));
+                        }
+                    }
+                    return items;
+                }
+
+                case 'dotted': {
+                    const head = lineContext.head;
+                    // `nier.▌`: the library's components; `Native.▌`: the registry's widgets; `AnchorData.▌`: the
+                    // rest of a property path. Each offered by the part after the dot.
+                    for (const alias of index ? namespaceMembers(index, file, head, 'alias') : []) {
+                        const item = new vscode.CompletionItem(alias.name, vscode.CompletionItemKind.Class);
+                        item.detail = `component — ${head}.${alias.name}`;
+                        item.insertText = nodeSnippet(alias.name);
+                        items.push(item);
+                    }
+                    if (scope?.kind !== 'props' && scope?.kind !== 'events' && scope?.kind !== 'resources') {
+                        for (const { tail, entry } of tailsAfter(store.nodeTypes(), head)) {
+                            const item = new vscode.CompletionItem(tail, vscode.CompletionItemKind.Struct);
+                            item.detail = entry.kind;
+                            item.insertText = nodeSnippet(tail);
+                            items.push(item);
+                        }
+                    }
+                    const face = scope?.kind === 'node' || scope?.kind === 'style' || scope?.kind === 'component'
+                        || scope?.kind === 'slotLines' ? propertyFace(scope) : [];
+                    for (const { tail, entry } of tailsAfter(face, head)) {
+                        items.push(propertyItem(entry, tail));
+                    }
+                    return items;
+                }
+
+                case 'nodeId':
+                    // A name being chosen: nothing that exists can complete it.
+                    return items;
+
+                case 'statement':
+                    break;
             }
 
-            // After '=': the value. Enum values when the property names an enum; booleans; resources.
-            // The property face follows where the line stands: '@slot' lines are the panel slot's,
-            // component blocks the component's, style bodies the union of every tag (a style can be
-            // worn by any of them), nodes their tag's.
-            if (lineContext.kind === 'value') {
-                const list = lineContext.isSlot
-                    ? store.symbols?.slotProperties ?? []
-                    : scope?.kind === 'component'
-                        ? store.componentInfo(scope.name)?.properties ?? []
-                        : scope?.kind === 'style'
-                            ? store.propertiesForStyle()
-                            : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
-                const info = store.findProperty(list, lineContext.property);
-                for (const value of store.enumValues(info?.enum)) {
-                    items.push(new vscode.CompletionItem(value, vscode.CompletionItemKind.EnumMember));
+            // ---- statement position: what the scope may hold -------------------------------------------------
+            switch (scope?.kind) {
+                case 'style': {
+                    // The union property face -- any tag may wear this style, so any tag's properties are honest
+                    // offers -- and the slot lines and components a style may carry.
+                    for (const property of store.propertiesForStyle()) {
+                        items.push(propertyItem(property));
+                    }
+                    items.push(keywordItem('@slot', '@slot '), keywordItem('@fill', '@fill'));
+                    const plus = new vscode.CompletionItem('+', vscode.CompletionItemKind.Operator);
+                    plus.insertText = '+ ';
+                    plus.detail = 'attach a behaviour or layout';
+                    items.push(plus);
+                    return items;
                 }
-                if (info?.type === 'bool') {
-                    items.push(new vscode.CompletionItem('true', vscode.CompletionItemKind.Value));
-                    items.push(new vscode.CompletionItem('false', vscode.CompletionItemKind.Value));
+                case 'resources': {
+                    // The five type keywords lead every entry.
+                    for (const type of symbols?.resourceTypes ?? RESOURCE_TYPES) {
+                        const item = keywordItem(type, `${type} `, 'resource type');
+                        item.kind = vscode.CompletionItemKind.TypeParameter;
+                        items.push(item);
+                    }
+                    return items;
                 }
-                for (const entry of model.resources) {
-                    const item = new vscode.CompletionItem(`@${entry.name}`, vscode.CompletionItemKind.Constant);
-                    item.detail = `${entry.type} = ${entry.valueText}`;
-                    items.push(item);
+                case 'props': {
+                    // `Type Name` or `Type Name = default`, one per line; `Enum` is followed by the enum's path.
+                    if (!line.includes('=')) {
+                        for (const type of symbols?.propTypes ?? PROP_TYPES) {
+                            const item = keywordItem(type, `${type} `, 'prop type');
+                            item.kind = vscode.CompletionItemKind.TypeParameter;
+                            items.push(item);
+                        }
+                    }
+                    return items;
                 }
-                return items;
+                case 'events':
+                    // An event's name is new by definition; its parameters' types complete inside the parentheses.
+                    return items;
+                case 'slotLines': {
+                    for (const info of symbols?.slotProperties ?? []) {
+                        items.push(propertyItem(info));
+                    }
+                    return items;
+                }
+                case 'component': {
+                    const info = store.componentInfo(scope.name);
+                    for (const property of info?.properties ?? []) {
+                        items.push(propertyItem(property));
+                    }
+                    for (const event of info?.events ?? []) {
+                        const item = new vscode.CompletionItem(event, vscode.CompletionItemKind.Event);
+                        item.insertText = `${event} -> `;
+                        items.push(item);
+                    }
+                    return items;
+                }
+                case 'branch':
+                case 'loop':
+                    // An `if` arm holds widgets only; a loop body is its one template widget.
+                    return nodeTypeItems();
+                case 'node': {
+                    const facts = instance();
+                    // An instance's lines set its component's props and route its events.
+                    for (const prop of facts?.summary?.props ?? []) {
+                        const item = new vscode.CompletionItem(prop.name, vscode.CompletionItemKind.Property);
+                        item.detail = `prop — ${propSignature(prop)}`;
+                        item.insertText = `${prop.name} = `;
+                        item.command = RETRIGGER;
+                        item.sortText = `0${prop.name}`;
+                        items.push(item);
+                    }
+                    for (const event of facts?.summary?.events ?? []) {
+                        const item = new vscode.CompletionItem(event.name, vscode.CompletionItemKind.Event);
+                        item.detail = event.params ? `event — ${event.name}(${event.params})` : 'event';
+                        item.insertText = `${event.name} -> `;
+                        item.sortText = `0${event.name}`;
+                        items.push(item);
+                    }
+                    for (const slot of facts?.summary?.slots ?? []) {
+                        const item = new vscode.CompletionItem(`slot ${slot.name}`, vscode.CompletionItemKind.Field);
+                        item.detail = slot.isDefault ? 'fill the default slot (nesting fills it too)' : 'fill this slot';
+                        item.insertText = new vscode.SnippetString(`slot ${slot.name} {\n\t$0\n}`);
+                        items.push(item);
+                    }
+                    // Its properties (a container-typed node's include its container's), its events, child
+                    // types, and the statements a node body takes.
+                    for (const property of store.propertiesForTag(scope.name)) {
+                        items.push(propertyItem(property));
+                    }
+                    for (const event of store.eventsForTag(scope.name)) {
+                        const item = new vscode.CompletionItem(event, vscode.CompletionItemKind.Event);
+                        item.insertText = `${event} -> `;
+                        items.push(item);
+                    }
+                    items.push(...nodeTypeItems('z')); // properties first, structure second
+                    items.push(keywordItem('@slot', '@slot '), keywordItem('@fill', '@fill'));
+                    const plus = new vscode.CompletionItem('+', vscode.CompletionItemKind.Operator);
+                    plus.insertText = '+ ';
+                    plus.detail = 'attach a behaviour or layout';
+                    items.push(plus);
+                    items.push(keywordItem('if', new vscode.SnippetString('if ${1:Condition} {\n\t$0\n}'),
+                        'widgets shown while the condition holds'));
+                    items.push(keywordItem('for', new vscode.SnippetString('for ${1:Item} in ${2:Source} {\n\t$0\n}'),
+                        'one copy of a widget per item, in this panel'));
+                    items.push(keywordItem('each', new vscode.SnippetString('each ${1:Item} in ${2:Source} {\n\t$0\n}'),
+                        'a list view\'s cells'));
+                    items.push(keywordItem('slot', 'slot ', 'declare a slot a host fills'));
+                    return items;
+                }
+                default: {
+                    // Top level: the root's type and the file-scope statements.
+                    items.push(...nodeTypeItems());
+                    for (const keyword of TOP_LEVEL_KEYWORDS) {
+                        items.push(keywordItem(keyword, `${keyword} `));
+                    }
+                    return items;
+                }
             }
-
-            // After '+': components, from the compiler's own resolvable set.
-            if (lineContext.kind === 'componentName') {
-                for (const [name, info] of Object.entries(store.symbols?.components ?? {})) {
-                    const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Class);
-                    item.detail = info.class;
-                    item.insertText = new vscode.SnippetString(`${name} {\n\t$0\n}`);
-                    items.push(item);
-                }
-                return items;
-            }
-
-            // After '@slot ': the panel slot's properties.
-            if (lineContext.kind === 'slotPropertyName') {
-                for (const info of store.symbols?.slotProperties ?? []) {
-                    items.push(propertyItem(info));
-                }
-                return items;
-            }
-
-            // After ':' on a node header or style header: this file's styles.
-            if (lineContext.kind === 'styleRef') {
-                for (const style of model.styles) {
-                    items.push(new vscode.CompletionItem(style.name, vscode.CompletionItemKind.Color));
-                }
-                return items;
-            }
-
-            // Inside a style body: the union property face -- any tag may wear this style, so any
-            // tag's properties are honest offers. (This scope had NO branch before: style bodies
-            // fell through to top-level tags, which is why HAlign offered nothing there.)
-            if (scope?.kind === 'style') {
-                for (const property of store.propertiesForStyle()) {
-                    items.push(propertyItem(property));
-                }
-                return items;
-            }
-
-            // Inside a resources block: the five type keywords lead every entry.
-            if (scope?.kind === 'resources') {
-                for (const type of store.symbols?.resourceTypes ?? ['Color', 'Number', 'Vector2', 'String', 'Asset']) {
-                    const item = new vscode.CompletionItem(type, vscode.CompletionItemKind.TypeParameter);
-                    item.insertText = `${type} `;
-                    items.push(item);
-                }
-                return items;
-            }
-
-            // Line start inside a component block: that class's properties and events.
-            if (scope?.kind === 'component') {
-                const info = store.componentInfo(scope.name);
-                for (const property of info?.properties ?? []) {
-                    items.push(propertyItem(property));
-                }
-                for (const event of info?.events ?? []) {
-                    const item = new vscode.CompletionItem(event, vscode.CompletionItemKind.Event);
-                    item.insertText = `${event} -> `;
-                    items.push(item);
-                }
-                return items;
-            }
-
-            // Line start inside a node: its properties, its events, child tags, and the directives.
-            if (scope?.kind === 'node') {
-                for (const property of store.propertiesForTag(scope.name)) {
-                    items.push(propertyItem(property));
-                }
-                for (const event of store.eventsForTag(scope.name)) {
-                    const item = new vscode.CompletionItem(event, vscode.CompletionItemKind.Event);
-                    item.insertText = `${event} -> `;
-                    items.push(item);
-                }
-                for (const tag of Object.keys(store.symbols?.tags ?? {})) {
-                    const item = new vscode.CompletionItem(tag, vscode.CompletionItemKind.Struct);
-                    item.insertText = new vscode.SnippetString(`${tag} \${1:Id} {\n\t$0\n}`);
-                    item.sortText = `z${tag}`; // properties first, structure second
-                    items.push(item);
-                }
-                const slot = new vscode.CompletionItem('@slot', vscode.CompletionItemKind.Keyword);
-                slot.insertText = '@slot ';
-                items.push(slot);
-                const plus = new vscode.CompletionItem('+', vscode.CompletionItemKind.Operator);
-                plus.insertText = '+ ';
-                plus.detail = 'attach a behaviour or layout';
-                items.push(plus);
-                return items;
-            }
-
-            // Top level: tags and the top-level keywords.
-            for (const tag of Object.keys(store.symbols?.tags ?? {})) {
-                const item = new vscode.CompletionItem(tag, vscode.CompletionItemKind.Struct);
-                item.insertText = new vscode.SnippetString(`${tag} \${1:Id} {\n\t$0\n}`);
-                items.push(item);
-            }
-            for (const keyword of TAG_ONLY_KEYWORDS) {
-                items.push(new vscode.CompletionItem(keyword, vscode.CompletionItemKind.Keyword));
-            }
-            return items;
         },
-    }, '@', '+', '=', ':', ' '));
+    }, '@', '+', '=', ':', ' ', '.'));
 
     // ---- hover ---------------------------------------------------------------------------------
     context.subscriptions.push(vscode.languages.registerHoverProvider(selector, {
-        provideHover(document, position) {
+        async provideHover(document, position) {
             store.ensureLoadedFor(document.uri.fsPath);
-            const range = document.getWordRangeAtPosition(position, /[@\w.\u00A0-\uFFFF]+/u);
+            const model = buildModel(document);
+            const offset = document.offsetAt(position);
+
+            // What the file borrows and declares for its hosts: aliases, namespaces, imported styles and
+            // resources, props, events, `emit`. Asked first: it knows when a word is one of those.
+            const index = await indexFor(document);
+            const fact = hoverAt(index, document.uri.fsPath, model.structure, offset);
+            if (fact) {
+                return new vscode.Hover(new vscode.MarkdownString(fact.markdown),
+                    new vscode.Range(document.positionAt(fact.start), document.positionAt(fact.end)));
+            }
+
+            const range = document.getWordRangeAtPosition(position, /[@\w. -￿]+/u);
             if (!range) {
                 return undefined;
             }
             const word = document.getText(range);
-            const model = buildModel(document);
 
             if (word.startsWith('@')) {
                 const entry = model.resources.find((r) => r.name === word.slice(1));
@@ -214,9 +520,16 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             };
             if (symbols?.tags[word]) {
                 const info = symbols.tags[word];
-                return new vscode.Hover(withTooltip(new vscode.MarkdownString(
-                    info.class ? `**${word}** — visual class \`${info.class}\`` : `**${word}** — a plain widget, no visual`),
-                    info.tooltip));
+                const what = info.kind === 'container' ? `layout container \`${info.class ?? word}\``
+                    : info.kind === 'widget' ? `registered widget \`${info.class ?? word}\``
+                        : info.class ? `visual class \`${info.class}\`` : 'a plain widget, no visual';
+                const md = withTooltip(new vscode.MarkdownString(`**${word}** — ${what}`), info.tooltip);
+                // A node written without an id still compiles to one; nothing in the text spells it.
+                const unnamed = anonymousNodeAt(model.structure, offset);
+                if (unnamed) {
+                    md.appendMarkdown(`\n\nunnamed — compiles as \`${unnamed.id}\` (hidden from Blueprint graphs)`);
+                }
+                return new vscode.Hover(md);
             }
             const component = store.componentInfo(word);
             if (component && /^\s*\+/.test(document.lineAt(position.line).text)) {
@@ -227,7 +540,9 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                 ? store.componentInfo(scope.name)?.properties ?? []
                 : scope?.kind === 'style'
                     ? store.propertiesForStyle()
-                    : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
+                    : scope?.kind === 'slotLines'
+                        ? symbols?.slotProperties ?? []
+                        : store.propertiesForTag(scope?.kind === 'node' ? scope.name : undefined);
             const property = store.findProperty(
                 [...list, ...(symbols?.slotProperties ?? [])], word);
             if (property) {
@@ -250,14 +565,31 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
     context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider(selector, {
         provideDocumentSymbols(document) {
             const model = buildModel(document);
-            const kindOf = (kind: string): vscode.SymbolKind =>
-                kind === 'namedSlot' ? vscode.SymbolKind.Key
-                    : kind === 'loop' ? vscode.SymbolKind.Operator
-                        : vscode.SymbolKind.Field;
-            const toSymbol = (node: { kind: string; tag: string; id: string; line: number; children: any[] }): vscode.DocumentSymbol => {
-                const range = document.lineAt(node.line).range;
-                const symbol = new vscode.DocumentSymbol(
-                    node.id || node.tag, node.tag, kindOf(node.kind), range, range);
+            const span = (start: number, end: number): vscode.Range =>
+                new vscode.Range(document.positionAt(start), document.positionAt(end));
+            const toSymbol = (node: OutlineNode): vscode.DocumentSymbol => {
+                let name = node.id || node.tag;
+                let detail = node.tag;
+                let kind = vscode.SymbolKind.Field;
+                if (node.kind === 'branch') {
+                    // `if HasSave()` / `else if IsLoading()` / `else`: the arm, its widgets under it.
+                    name = node.condition !== undefined ? `${node.tag} ${node.condition}` : node.tag;
+                    detail = '';
+                    kind = vscode.SymbolKind.Boolean;
+                } else if (node.kind === 'loop') {
+                    kind = vscode.SymbolKind.Operator;
+                } else if (node.kind === 'namedSlot') {
+                    kind = vscode.SymbolKind.Key;
+                    detail = node.fillsSlot ? 'slot fill' : node.defaultSlot ? 'slot (default)' : 'slot';
+                } else if (node.anonymous) {
+                    // Named by its type, as the author wrote it; the made-up id is what the designer shows.
+                    name = node.tag;
+                    detail = node.id;
+                }
+                const range = span(node.start, Math.max(node.end, node.start + 1));
+                const selection = span(node.selectionStart, Math.max(node.selectionEnd, node.selectionStart));
+                const symbol = new vscode.DocumentSymbol(name || node.tag, detail, kind, range,
+                    range.contains(selection) ? selection : range);
                 symbol.children = node.children.map(toSymbol);
                 return symbol;
             };
@@ -277,36 +609,36 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                 }
                 out.push(resources);
             }
+            // What the class offers its hosts: the props they set, the events they route. A group spans its
+            // first entry's line to its last's, so every child sits inside its parent's range.
+            const lines = (first: number, last: number): vscode.Range => new vscode.Range(
+                document.lineAt(Math.max(0, first - 1)).range.start, document.lineAt(Math.max(0, last - 1)).range.end);
+            const props = model.structure.props ?? [];
+            if (props.length > 0) {
+                const first = lines(props[0].line, props[props.length - 1].line);
+                const group = new vscode.DocumentSymbol('props', '', vscode.SymbolKind.Namespace, first, first);
+                for (const prop of props) {
+                    const range = document.lineAt(Math.max(0, prop.line - 1)).range;
+                    const selection = span(prop.nameStart, prop.nameStart + prop.name.length);
+                    group.children.push(new vscode.DocumentSymbol(prop.name,
+                        prop.defaultText ? `${prop.type} = ${prop.defaultText}` : prop.type,
+                        vscode.SymbolKind.Property, range, range.contains(selection) ? selection : range));
+                }
+                out.push(group);
+            }
+            const events = model.structure.events ?? [];
+            if (events.length > 0) {
+                const first = lines(events[0].line, events[events.length - 1].line);
+                const group = new vscode.DocumentSymbol('events', '', vscode.SymbolKind.Namespace, first, first);
+                for (const event of events) {
+                    const range = document.lineAt(Math.max(0, event.line - 1)).range;
+                    const selection = span(event.nameStart, event.nameStart + event.name.length);
+                    group.children.push(new vscode.DocumentSymbol(event.name, eventSignature(event),
+                        vscode.SymbolKind.Event, range, range.contains(selection) ? selection : range));
+                }
+                out.push(group);
+            }
             return out;
-        },
-    }));
-
-    // ---- definition: @Name -> its entry; a style use -> its declaration ------------------------
-    context.subscriptions.push(vscode.languages.registerDefinitionProvider(selector, {
-        provideDefinition(document, position) {
-            const range = document.getWordRangeAtPosition(position, /[@\w\u00A0-\uFFFF]+/u);
-            if (!range) {
-                return undefined;
-            }
-            const word = document.getText(range);
-            const model = buildModel(document);
-            if (word.startsWith('@')) {
-                const entry = model.resources.find((r) => r.name === word.slice(1));
-                if (entry) {
-                    return new vscode.Location(document.uri,
-                        new vscode.Position(entry.line, entry.nameStart));
-                }
-                return undefined;
-            }
-            const before = document.lineAt(position.line).text.slice(0, range.start.character);
-            if (/:\s*$/.test(before)) {
-                const style = model.styles.find((s) => s.name === word);
-                if (style) {
-                    return new vscode.Location(document.uri,
-                        new vscode.Position(style.line, style.nameStart));
-                }
-            }
-            return undefined;
         },
     }));
 }

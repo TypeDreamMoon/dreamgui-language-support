@@ -17,6 +17,7 @@ import {
     BridgeFunctionInfo, BridgeAssetInfo, BridgeVariableInfo, BridgeMemberInfo,
 } from './core/bridgeProtocol';
 import { packagePathOf } from './core/workspaceIndex';
+import { bindingTailOf } from './core/bindingIntel';
 
 const CACHE_TTL_MS = 60_000;
 
@@ -184,7 +185,10 @@ export function registerBridgeCompletion(context: vscode.ExtensionContext, bridg
             // `<->` contains both other arrows, so it is judged first: its right side is a
             // VARIABLE, and the bridge now has a list of those.
             const wantsTwoWay = /<->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
-            const wantsBinding = !wantsTwoWay && /<-\s*[\w\u00A0-\uFFFF]*$/u.test(line);
+            // An `if` condition is a binding expression: what `<-` can call, a condition can test.
+            const condition = bindingTailOf(line);
+            const wantsCondition = condition?.op === 'if' && /^\s*[\w\u00A0-\uFFFF]*$/u.test(condition.tail);
+            const wantsBinding = !wantsTwoWay && (/<-\s*[\w\u00A0-\uFFFF]*$/u.test(line) || wantsCondition);
             const wantsHandler = !wantsTwoWay && !wantsBinding && /->\s*[\w\u00A0-\uFFFF]*$/u.test(line);
             if (!wantsTwoWay && !wantsBinding && !wantsHandler) {
                 return undefined;

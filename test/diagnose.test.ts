@@ -187,3 +187,175 @@ test('a lexical refusal comes through first, with the code and span the scanner 
     assert.equal(judged[0].severity, 'error');
     assert.equal(text.slice(judged[0].start, judged[0].end), '#GG');
 });
+
+// ---- use … as, namespaces and component names ----------------------------------------------------
+//
+// A family written the NieR way: a library names its components and styles them, a component styles itself from the
+// library that names it (no cycle: a component's class is all an importer takes from it), and screens use the
+// library plainly or under a namespace.
+
+const FAMILY: Record<string, string> = {
+    'I:/proj/DUI/UI/Palette.dui': 'resources {\n    Color Swatch = #E6E9F0\n}\nstyle Base {\n    RenderOpacity = 1\n}\n',
+    'I:/proj/DUI/UI/Common.dui': [
+        'use "UI/Components/Row.dui" as Row',
+        'use /Game/UI/WBP_Slider as Slider',
+        'use "UI/Palette.dui" as pal',
+        'resources {',
+        '    Color Ink = #514D42',
+        '    Asset Card = /Game/UI/WBP_Card',
+        '}',
+        'style Caption : pal.Base {',
+        '    Color = @Ink',
+        '}',
+        '',
+    ].join('\n'),
+    'I:/proj/DUI/UI/Components/Row.dui': [
+        'class /Game/UI/WBP_Row',
+        'use "UI/Common.dui"',
+        'props {',
+        '    Text Label',
+        '}',
+        'Widget Root : Caption {',
+        '    Text : Caption { Text <- Label }',
+        '}',
+        'style RowOnly {',
+        '    RenderOpacity = 0.5',
+        '}',
+        '',
+    ].join('\n'),
+};
+
+const TAGS = ['Widget', 'Text', 'Image', 'VerticalBox', 'Native.Button'];
+const TAG_INFO = {
+    Widget: { kind: 'visual' }, Text: { kind: 'visual', class: 'DreamText' }, Image: { kind: 'visual' },
+    VerticalBox: { kind: 'container', class: 'DreamLayoutContainerVerticalBox' }, 'Native.Button': { kind: 'widget' },
+};
+
+const judged = (text: string, index?: WorkspaceIndex, tags?: readonly string[]): string[] =>
+    judgeDocument({ file: 'I:/proj/DUI/UI/Screen.dui', text, index, tags, tagInfo: tags ? TAG_INFO : undefined })
+        .map((d) => `${d.code === undefined ? '--' : 'DUI' + d.code} ${d.severity} ${d.message}`);
+
+test('the family judges clean: library, component and a screen using the library plainly', () => {
+    const index = indexWith(FAMILY);
+    for (const [file, text] of Object.entries(FAMILY)) {
+        assert.deepEqual(judgeDocument({ file, text, index, tags: TAGS, tagInfo: TAG_INFO }), [], file);
+    }
+    const screen = [
+        'use "UI/Common.dui"',
+        'Widget Root {',
+        '    Row Item_0 : Caption { Label = "Warped Wire" }',
+        '    Slider Volume { }',
+        '    @Card { }',
+        '    Text { Color = @Ink  Text <- Title }',
+        '    VerticalBox { Native.Button Ok { } }',
+        '}',
+        '',
+    ].join('\n');
+    assert.deepEqual(judged(screen, index, TAGS), []);
+});
+
+test('under a namespace, everything the library has reads ns. -- and only that way', () => {
+    const index = indexWith(FAMILY);
+    const screen = [
+        'use "UI/Common.dui" as ui',
+        'Widget Root : ui.Caption {',
+        '    ui.Row Item_0 { Color = @ui.Ink  Tint = @ui.pal.Swatch }',
+        '    ui.Slider Volume { }',
+        '}',
+        '',
+    ].join('\n');
+    assert.deepEqual(judged(screen, index, TAGS), []);
+    // Unqualified, the same names are not in scope: the compiler entered them under `ui.` only.
+    const unqualified = screen.replace(': ui.Caption', ': Caption').replace('@ui.Ink', '@Ink');
+    assert.deepEqual(judged(unqualified, index).map((line) => line.split(' ')[0]), ['DUI3004', 'DUI4007']);
+});
+
+test('a namespaced name the library lacks is said, as a warning, once every import was followed', () => {
+    const index = indexWith(FAMILY);
+    const screen = 'use "UI/Common.dui" as ui\nWidget Root : ui.Caption {\n    Text T : ui.Lable { Color = @ui.Inc }\n}\n';
+    assert.deepEqual(judged(screen, index), [
+        "DUI3004 warning 'ui.Lable' names a style this file does not declare",
+        "DUI4007 warning '@ui.Inc' names no entry in a resources block",
+    ]);
+    // A library the index cannot find: nothing can be said about what it holds.
+    assert.deepEqual(judged(screen, indexWith({})), []);
+});
+
+test('DUI3021 from the index: a prefix no import declares, carried or written', () => {
+    const index = indexWith(FAMILY);
+    // `pal` is the library's own namespace; a plain use brings it along, so `@pal.Swatch` is fine here...
+    assert.deepEqual(judged('use "UI/Common.dui"\nWidget Root { Tint = @pal.Swatch }\n', index), []);
+    // ...and `nier` is nobody's.
+    assert.deepEqual(judged('use "UI/Common.dui"\nWidget Root { Tint = @nier.Ink }\n', index), [
+        `DUI3021 warning 'nier.Ink' is qualified by 'nier', which no 'use "..." as nier' declares`,
+    ]);
+    // A component's `as` name is not a namespace either, and the index can tell which one a file is.
+    assert.deepEqual(judged('use "UI/Components/Row.dui" as row\nWidget Root : row.RowOnly { }\n', index), [
+        `DUI3021 warning 'row.RowOnly' is qualified by 'row', which no 'use "..." as row' declares`,
+    ]);
+});
+
+test('a component used `as` brings its name and nothing else: its styles stay its own', () => {
+    const index = indexWith(FAMILY);
+    assert.deepEqual(judged('use "UI/Components/Row.dui" as Row\nWidget Root : RowOnly {\n    Row R { }\n}\n', index)
+        .map((line) => line.split(' ')[0]), ['DUI3004']);
+});
+
+test('DUI3018: an alias a built-in tag or a container already answers to', () => {
+    const index = indexWith(FAMILY);
+    assert.deepEqual(judged('use /Game/UI/WBP_Text as Text\nWidget Root { }\n', index, TAGS), [
+        "DUI3018 error 'Text' is already a built-in tag, which a node type means before any alias -- choose another name",
+    ]);
+    // A file's name is a component's only when the index sees a root in it -- and then a warning, the index's word.
+    assert.deepEqual(judged('use "UI/Components/Row.dui" as VerticalBox\nWidget Root { }\n', index, TAGS), [
+        "DUI3018 warning 'VerticalBox' is already a layout container (DreamLayoutContainerVerticalBox), which a node type means before any alias -- choose another name",
+    ]);
+    // A library under that name is a namespace, which no built-in shadows; nor does a spelling the dump does not have.
+    assert.deepEqual(judged('use "UI/Palette.dui" as Text\nWidget Root { }\n', index, TAGS), []);
+    assert.deepEqual(judged('use /Game/UI/WBP_Text as text\nWidget Root { }\n', index, TAGS), []);
+});
+
+test('the tag sweep knows aliases, own and imported, and says nothing while an import is out of sight', () => {
+    const index = indexWith(FAMILY);
+    assert.deepEqual(judged('use /Game/UI/WBP_Row as Row\nWidget Root {\n    Row A { }\n    Sparkle B { }\n}\n', index, TAGS),
+        ["-- information 'Sparkle' is not a built-in tag (the compiler also accepts /asset paths)"]);
+    // `use "Elsewhere.dui"` resolves to nothing here, and may well name Sparkle.
+    assert.deepEqual(judged('use "Elsewhere.dui"\nWidget Root {\n    Sparkle B { }\n}\n', index, TAGS), []);
+});
+
+test('an @Name node type is a resource reference, said in the compiler\'s words when it is missing', () => {
+    assert.deepEqual(judged('Widget Root {\n    @Row R { }\n}\n'), [
+        "DUI4007 warning '@Row' names no entry in a resources block; a node type written with '@' is an Asset resource, as in 'Asset Row = /Game/UI/WBP_Row'",
+    ]);
+});
+
+test('a library of component names alone declares no root on purpose', () => {
+    assert.deepEqual(judged('use "UI/Components/Row.dui" as Row\nuse /Game/UI/WBP_Tab as Tab\n'), []);
+});
+
+test('the new grammar judges clean where it is well formed: props bound, emit, if/else, for, slots', () => {
+    const text = [
+        'class /Game/UI/WBP_Card',
+        'props {',
+        '    Text Label',
+        '}',
+        'events { Picked(Number Index); Closed }',
+        'Widget Root {',
+        '    Text Caption { Text <- Label }',
+        '    Native.Button Ok { OnClicked -> emit Picked(1) }',
+        '    if HasDetail() {',
+        '        Image Detail { }',
+        '    } else {',
+        '        Text { Text = "none" }',
+        '    }',
+        '    VerticalBox List {',
+        '        for Item in GetItems() {',
+        '            Text { Text <- Item.Name }',
+        '        }',
+        '    }',
+        '    slot Body default',
+        '}',
+        '',
+    ].join('\n');
+    assert.deepEqual(judged(text, indexWith({}), TAGS), []);
+});

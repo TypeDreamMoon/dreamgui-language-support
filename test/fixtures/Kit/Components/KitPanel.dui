@@ -1,0 +1,13 @@
+// A titled panel: what a host nests in it goes into Body, its default slot; Footer is filled by name.
+class /Game/UI/Kit/WBP_KitPanel
+use "Kit/KitLibrary.dui"
+
+VerticalBox Root {
+    Spacing = 12
+    Text Title : Caption { Text = "Panel" }
+    slot Body default : Column
+    slot Footer {
+        + HorizontalBox { Spacing = 6 }
+        @slot Padding = (0, 8, 0, 0)
+    }
+}

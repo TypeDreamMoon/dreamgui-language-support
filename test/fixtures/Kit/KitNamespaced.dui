@@ -1,0 +1,15 @@
+// The same kit under a namespace: its styles, resources and component names all read `kit.`, and its palette, which
+// it took under a namespace of its own, `kit.pal.`.
+class /Game/UI/Kit/WBP_KitNamespaced
+use "Kit/KitLibrary.dui" as kit
+
+Widget Root : kit.Column {
+    Image Backdrop {
+        Brush.TintColor = @kit.pal.Shade
+        @slot { HorizontalAlignment = Fill  VerticalAlignment = Fill }
+    }
+    kit.Row Volume { Label = "Volume" }
+    kit.Panel {
+        Text : kit.Caption { Color = @kit.Ink }
+    }
+}

@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { scan, Token, NAME_SIZE } from '../src/core/scanner';
+import { scan, Token, NAME_SIZE, RESERVED_WORDS, CONTEXTUAL_KEYWORDS, isIdentifierChar } from '../src/core/scanner';
 
 function kinds(source: string): string[] {
     return scan(source).tokens.map((token) => token.kind);
@@ -294,4 +294,36 @@ test('the real SettingsPanel.dui produces zero lexical diagnostics', () => {
     const result = scan(fixture);
     assert.deepEqual(result.diagnostics, []);
     assert.ok(result.tokens.length > 100);
+});
+
+// ---- the words the language grew -----------------------------------------------------------------
+
+test('the reserved words are the compiler\'s twelve, and the contextual ones are none of them', () => {
+    assert.deepEqual([...RESERVED_WORDS].sort(),
+        ['class', 'each', 'ease', 'external', 'for', 'in', 'resources', 'slot', 'style', 'timeline', 'use', 'was']);
+    assert.deepEqual([...CONTEXTUAL_KEYWORDS].sort(), ['as', 'default', 'else', 'emit', 'events', 'fill', 'if', 'props']);
+    for (const word of CONTEXTUAL_KEYWORDS) {
+        assert.equal(RESERVED_WORDS.has(word), false, word);
+    }
+});
+
+test('the newer spellings lex from the tokens there were: @fill 2, ns.Name, use … as, emit, a condition', () => {
+    assert.deepEqual(kinds('@fill 2'), ['at', 'identifier', 'number', 'end']);
+    assert.deepEqual(kinds(': nier.Label'), ['colon', 'identifier', 'dot', 'identifier', 'end']);
+    assert.deepEqual(kinds('use "Row.dui" as Row'), ['identifier', 'string', 'identifier', 'identifier', 'end']);
+    assert.deepEqual(kinds('use /Game/UI/WBP_Row as Row'), ['identifier', 'assetPath', 'identifier', 'identifier', 'end']);
+    assert.deepEqual(kinds('OnClick -> emit Picked(-1)'),
+        ['identifier', 'eventArrow', 'identifier', 'identifier', 'openParen', 'number', 'closeParen', 'end']);
+    assert.deepEqual(kinds('if !HasSave() && -Count() < 0 {'),
+        ['identifier', 'bang', 'identifier', 'openParen', 'closeParen', 'ampAmp', 'minus', 'identifier', 'openParen',
+            'closeParen', 'less', 'number', 'openBrace', 'end']);
+    assert.deepEqual(codes('Enum /Script/Game.EKind Kind = Cycle'), []);
+});
+
+test('isIdentifierChar is the rule a made id sanitizes a type with', () => {
+    const sanitized = (type: string): string =>
+        [...type].map((char) => (isIdentifierChar(char.charCodeAt(0)) ? char : '_')).join('');
+    assert.equal(sanitized('nier.Row'), 'nier_Row');
+    assert.equal(sanitized('@Row'), '_Row');
+    assert.equal(sanitized('/Game/UI/WBP_行'), '_Game_UI_WBP_行');
 });

@@ -59,3 +59,10 @@ test('the round trip is exact: parse(format(parse(x))) == parse(x)', () => {
 test('references never produce a span', () => {
     assert.equal(colorsIn('A = @Accent\n').length, 0);
 });
+
+test('a props default gets its chip; a namespaced reference grows none', () => {
+    const source = 'props {\n    Color Tint = #FF0000\n}\nWidget Root {\n    Color = @ui.Ink\n    Shown <- Count() > 0\n}\n';
+    const spans = colorsIn(source);
+    assert.equal(spans.length, 1);
+    assert.equal(spans[0].red, 1);
+});

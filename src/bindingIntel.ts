@@ -12,6 +12,11 @@
  *
  * The parsing lives in core/bindingIntel.ts, where it is tested without an editor at either end;
  * this file is the vscode shell around it.
+ *
+ * Two kinds of expression are covered without the bridge asking anything new: an `if` condition is
+ * a binding expression like any `<-` right side (core/bindingIntel recognises its header), and
+ * `emit Picked(` raises an event this very file declares, so its signature is read off the
+ * `events` block -- no editor needed at all.
  */
 import * as vscode from 'vscode';
 import { BridgeClient } from './bridge';
@@ -19,6 +24,7 @@ import { BridgeCompletionCache } from './bridgeCompletion';
 import { WorkspaceIndexHost } from './workspace';
 import { buildModel } from './docmodel';
 import { BridgeFunctionInfo } from './core/bridgeProtocol';
+import { eventNamed } from './core/componentIntel';
 import {
     bindingTailOf, callContextAt, memberPrefixAt, eachScopesOf, eachScopeNamed, parseEachSource,
     signatureLabelOf, findByName, isIdentifier, EachScope,
@@ -99,12 +105,41 @@ export function registerBindingIntel(
     // and refusing on the arrow the author has not finished changing would be its own defect.
     context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(selector, {
         async provideSignatureHelp(document, position) {
-            if (!editorIsUp(document)) {
-                return undefined;
-            }
             const line = document.lineAt(position.line).text.slice(0, position.character);
             const binding = bindingTailOf(line);
             const call = binding && callContextAt(binding.tail);
+
+            // `-> emit Picked(▌`: the event is this file's, and its parameters are its `events` entry's.
+            if (call?.isEmit) {
+                const event = eventNamed(buildModel(document).structure, call.name);
+                if (!event) {
+                    return undefined;
+                }
+                const parameters: [number, number][] = [];
+                let label = `emit ${event.name}(`;
+                event.params.forEach((param, at) => {
+                    if (at > 0) {
+                        label += ', ';
+                    }
+                    const type = param.enumPath ? `${param.type} ${param.enumPath}` : param.type;
+                    const text = `${type} ${param.name}`;
+                    parameters.push([label.length, label.length + text.length]);
+                    label += text;
+                });
+                label += ')';
+                const signature = new vscode.SignatureInformation(label,
+                    new vscode.MarkdownString(`raises the event declared on line ${event.line}`));
+                signature.parameters = parameters.map((span) => new vscode.ParameterInformation(span));
+                const help = new vscode.SignatureHelp();
+                help.signatures = [signature];
+                help.activeSignature = 0;
+                help.activeParameter = Math.min(call.argIndex, Math.max(0, parameters.length - 1));
+                return help;
+            }
+
+            if (!editorIsUp(document)) {
+                return undefined;
+            }
             const classPath = classPathOf(document);
             if (!call || !classPath) {
                 return undefined;

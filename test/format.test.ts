@@ -81,15 +81,129 @@ test("a rename clause keeps the compiler's own spelling, and a call keeps none",
 
 test("a '}' owns its line, but an empty block stays where it is", () => {
     const source = 'Widget Root { + Overlay {} Text Title { FontSize = 18 } }\n';
+    // The root holds blocks with something in them, so it is laid out; Title holds none and was written on one line,
+    // so it keeps that line.
     assert.equal(format(source), [
         'Widget Root {',
         '    + Overlay {}',
+        '    Text Title { FontSize = 18 }',
+        '}',
+        '',
+    ].join('\n'));
+    // Written across lines, a block is laid out across lines, whatever it holds.
+    assert.equal(format('Widget Root {\nText Title { FontSize = 18\n}\n}\n'), [
+        'Widget Root {',
         '    Text Title {',
         '        FontSize = 18',
         '    }',
         '}',
         '',
     ].join('\n'));
+});
+
+// ---- the newer constructs ----------------------------------------------------------------------
+
+test('a one-line block keeps its line, its statements and their two-space gap', () => {
+    const source = [
+        'events { Picked(Number Index);Closed }',
+        'Widget Root {',
+        '+ NieRScreenScope {InputMode = Menu   bCloseOnBack = false}',
+        'Tab Tab_0 : NavTab { Label = "MAP"; Icon = @IconMap }',
+        'Text Hex { @slot { VerticalAlignment = Center Padding = (2, 0, 0, 0) } }',
+        'RectBlock Key0 : KeyCap { Text KeyText0 : KeyCapText { } }',
+        'for Item in GetItems() {',
+        'Row : Counted { Label <- Item.Label   Count <- Item.Count }',
+        '}',
+        '}',
+        '',
+    ].join('\n');
+    assert.equal(format(source), [
+        'events { Picked(Number Index); Closed }',
+        'Widget Root {',
+        '    + NieRScreenScope { InputMode = Menu  bCloseOnBack = false }',
+        '    Tab Tab_0 : NavTab { Label = "MAP"; Icon = @IconMap }',
+        '    Text Hex {',
+        '        @slot { VerticalAlignment = Center  Padding = (2, 0, 0, 0) }',
+        '    }',
+        '    RectBlock Key0 : KeyCap { Text KeyText0 : KeyCapText {} }',
+        '    for Item in GetItems() {',
+        '        Row : Counted { Label <- Item.Label  Count <- Item.Count }',
+        '    }',
+        '}',
+        '',
+    ].join('\n'));
+});
+
+test('use … as, props, events, slots, @fill and an if/else chain keep their tokens and take the indent', () => {
+    const source = [
+        'use "UI/Common.dui" as ui',
+        'use /Game/UI/WBP_Slider as Slider',
+        'props {',
+        'Text Label',
+        'Enum /Script/Game.EKind Kind=Cycle',
+        '}',
+        'events {',
+        'Picked(Number Index,  String Why)',
+        '}',
+        'HorizontalBox Root : ui.Row {',
+        'slot Rows default : RowList {',
+        '+ VerticalBox { Spacing = 15 }',
+        '}',
+        'Text LabelText {',
+        'Text <- Label',
+        '@fill 2',
+        'OnClick -> emit Picked(-Index,@ui.Gap)',
+        '}',
+        'if (HasSave() || !Busy) {',
+        'Text A {}',
+        '} else if Loading {',
+        'Text B {}',
+        '}',
+        'else {',
+        'ui.Row {}',
+        '}',
+        '}',
+        '',
+    ].join('\n');
+    const expected = [
+        'use "UI/Common.dui" as ui',
+        'use /Game/UI/WBP_Slider as Slider',
+        'props {',
+        '    Text Label',
+        '    Enum /Script/Game.EKind Kind = Cycle',
+        '}',
+        'events {',
+        '    Picked(Number Index, String Why)',
+        '}',
+        'HorizontalBox Root : ui.Row {',
+        '    slot Rows default : RowList {',
+        '        + VerticalBox { Spacing = 15 }',
+        '    }',
+        '    Text LabelText {',
+        '        Text <- Label',
+        '        @fill 2',
+        '        OnClick -> emit Picked(-Index, @ui.Gap)',
+        '    }',
+        '    if (HasSave() || !Busy) {',
+        '        Text A {}',
+        '    } else if Loading {',
+        '        Text B {}',
+        '    }',
+        '    else {',
+        '        ui.Row {}',
+        '    }',
+        '}',
+        '',
+    ].join('\n');
+    assert.equal(format(source), expected);
+    assert.deepEqual(tokenSignature(format(source)), tokenSignature(source));
+    assert.equal(format(expected), expected);
+});
+
+test("a negation keeps its operand: '-Count()' would read back as a malformed number if it were spaced", () => {
+    const source = 'Widget Root {\n    Offset <- -Count() - Base\n}\n';
+    assert.equal(format(source), source);
+    assert.equal(format('Widget Root {\nOffset<- -Count()-Base\n}\n'), source);
 });
 
 test('runs of blank lines fold to one, trailing whitespace goes, the file ends in one newline', () => {

@@ -1,0 +1,25 @@
+// The kit's library: its components by the short names screens place them by -- these `use … as` lines travel with
+// the library -- the look they share, and a palette under a namespace of its own.
+use "Kit/Components/KitRow.dui" as Row
+use "Kit/Components/KitPanel.dui" as Panel
+use /Game/UI/WBP_Slider as Slider
+use "Kit/Palette.dui" as pal
+
+resources {
+    Color  Ink  = #514D42
+    Number Gap  = 8
+    Asset  Card = /Game/UI/WBP_Card
+}
+
+style Caption : pal.Base {
+    FontSize = 18
+    Color    = @Ink
+}
+style Column {
+    + VerticalBox { Spacing = 8 }
+    @fill
+}
+style RowBox {
+    AnchorData.SizeDelta = (0, 48)
+    @slot { HorizontalAlignment = Fill  Padding = (0, 4, 0, 4) }
+}

@@ -33,6 +33,33 @@ export function filesDeclaring(index: WorkspaceIndex, kind: 'style' | 'resource'
     return out;
 }
 
+/**
+ * The component files a type name that resolves to nothing could have meant: files with a root node whose name is
+ * the type -- `Row` -> `Row.dui`, or the prefixed family spelling the corpus uses, `NieR_Row.dui`. Exact names win
+ * over prefixed ones, so `Row` never picks `NieR_Row.dui` while a `Row.dui` exists. The caller acts on a UNIQUE answer
+ * only: two candidates are two guesses, and an import that names the wrong class is worse than none.
+ */
+export function componentFilesNamed(index: WorkspaceIndex, typeName: string): string[] {
+    if (!/^[A-Za-z_\u00A0-\uFFFF][\w\u00A0-\uFFFF]*$/u.test(typeName)) {
+        return [];
+    }
+    const wanted = typeName.toLowerCase();
+    const exact: string[] = [];
+    const prefixed: string[] = [];
+    for (const summary of index.allSummaries()) {
+        if (!summary.hasRoot) {
+            continue;
+        }
+        const base = norm(summary.file).replace(/^.*\//, '').replace(/\.dui$/i, '').toLowerCase();
+        if (base === wanted) {
+            exact.push(summary.file);
+        } else if (base.endsWith('_' + wanted)) {
+            prefixed.push(summary.file);
+        }
+    }
+    return exact.length > 0 ? exact : prefixed;
+}
+
 export interface UseStyle {
     /** The file's existing `use` lines all lead with './'. */
     leadingDot: boolean;
@@ -117,8 +144,9 @@ export function planUseSpelling(input: UseSpellingInput): string | undefined {
  * corpus is written that way, and a quickfix is not the place to start a second convention.
  */
 export function planUseInsertion(
-    structure: StructureResult & { tokens: Token[] }, spelling: string, sourceLength: number): EditPlan {
-    const directive = `use "${spelling}"`;
+    structure: StructureResult & { tokens: Token[] }, spelling: string, sourceLength: number, alias?: string): EditPlan {
+    // `as Row` names the file's class as a node type (a component), or opens it as a namespace (a library).
+    const directive = alias ? `use "${spelling}" as ${alias}` : `use "${spelling}"`;
 
     const last = structure.imports[structure.imports.length - 1];
     if (last) {

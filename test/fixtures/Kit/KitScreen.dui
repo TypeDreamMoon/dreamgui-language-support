@@ -1,0 +1,25 @@
+// A screen built from the kit by its short names: rows nested into a panel's default slot, one row per option from
+// the class's data, the panel's footer filled by name, and a hint shown only while there is something to save.
+class /Game/UI/Kit/WBP_KitScreen
+use "Kit/KitLibrary.dui"
+
+Widget Root {
+    + Overlay { }
+
+    Panel Settings {
+        Row Volume : RowBox { Label = "Volume"; Changed -> HandleVolume }
+        Row Mode { Label <- GetModeName()  Index = 1 }
+        for Option in GetOptions() {
+            Row { Label <- Option.Label  Kind <- Option.Kind }
+        }
+        slot Footer {
+            HorizontalBox {
+                Slider Gain { Value <-> Gain }
+                @Card { }
+            }
+        }
+    }
+    if HasUnsavedChanges() {
+        Text Unsaved : Caption { Text = "Unsaved changes" }
+    }
+}

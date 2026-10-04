@@ -118,3 +118,36 @@ test('a malformed diagnostic inside an entry is dropped, its siblings kept', () 
     }))!;
     assert.deepEqual(mailbox.files['x.dui'].diagnostics.map((d) => d.code), [5001]);
 });
+
+test('the use … as / props / events / if / slot codes are raised live and their compiler copies filtered', () => {
+    for (const code of [2015, 2016, 2017, 2018, 2019, 3016, 3017, 3019, 3020, 3022]) {
+        assert.ok(LOCALLY_RAISED.has(code), `DUI${code} should be raised locally`);
+        assert.ok(MAILBOX_SUPPRESSED.has(code), `DUI${code} is one file's characters and should not wear two squiggles`);
+    }
+});
+
+test('DUI3018 and DUI3021 are raised live but reach Problems from the compiler too: the mirror sees less', () => {
+    // 3018 needs the symbols dump and, for a file, the index; 3021 is settled alone only for a file with no plain
+    // `use`, and otherwise only once every import resolved in the index.
+    for (const code of [3018, 3021]) {
+        assert.ok(LOCALLY_RAISED.has(code), `DUI${code} should be raised locally`);
+        assert.ok(!MAILBOX_SUPPRESSED.has(code), `DUI${code} must reach Problems from the compiler too`);
+    }
+});
+
+test('a compiler DUI3004 / DUI4007 about a namespaced name passes through; one about a plain name does not', () => {
+    const entry = parseMailbox(JSON.stringify({
+        version: 1,
+        files: {
+            'x.dui': {
+                diagnostics: [
+                    { code: 3004, severity: 'error', line: 3, column: 5, message: "'Lable' names a style this file does not declare" },
+                    { code: 3004, severity: 'error', line: 4, column: 5, message: "'nier.Lable' names a style this file does not declare" },
+                    { code: 4007, severity: 'error', line: 5, column: 9, message: "'@Inc' names no entry in a resources block" },
+                    { code: 4007, severity: 'error', line: 6, column: 9, message: "'@nier.Inc' names no entry in a resources block" },
+                ],
+            },
+        },
+    }))!.files['x.dui'];
+    assert.deepEqual(mailboxDiagnosticsToShow(entry).map((d) => `${d.code}:${d.line}`), ['3004:4', '4007:6']);
+});
