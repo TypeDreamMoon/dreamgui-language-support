@@ -10,6 +10,9 @@ DreamGUI `.dui` 界面层级的语言支持。
   (`Value <-> Volume`)、`use "…"` 导入与循环来源的两种形状都在语法高亮里;语义层按身份着色——
   节点 id 按"它将成为的成员变量"、样式按类、资源按只读常量、`->` 事件与处理函数、调用按函数、
   裸名字按变量、`each` 体内的 `Item.Member` 首段按它引用的循环参数、组件各归其位。
+- **`rows` 表格**(`rows Row : ListRow (Label, Description) { "City Ruins", "…" … }`)按编译器的方式读取:每行一个
+  匿名 widget,用该行第一个值命名;表格读不通报 DUI2020,两行 key 冲突报 DUI3023(警告)。表头高亮,样式只检查一次;
+  格式化保持每行一行,也保留作者为对齐列加的空格。
 - **组件语法的高亮**:`use "Row.dui" as Row`、`use /Game/UI/WBP_Row as Row` 与
   `use "Lib.dui" as nier`;带类型词的 `props { … }` 与 `events { … }`;`OnClick -> emit Picked(Index)`;
   `slot Rows default : RowList { … }` 与宿主里的 `slot Detail { … }`;容器作节点类型

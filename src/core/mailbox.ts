@@ -52,8 +52,8 @@ export interface Mailbox {
  */
 export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
     1001, 1002, 1003, 1004, 1005, 1006,
-    2002, 2003, 2004, 2006, 2013, 2015, 2016, 2017, 2018, 2019,
-    3001, 3002, 3004, 3005, 3008, 3010, 3011, 3012, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3022,
+    2002, 2003, 2004, 2006, 2013, 2015, 2016, 2017, 2018, 2019, 2020,
+    3001, 3002, 3004, 3005, 3008, 3010, 3011, 3012, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3021, 3022, 3023,
     4007,
 ]);
 
@@ -82,13 +82,13 @@ export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
  *     roots and always knows.
  *
  * The parse-level codes the `use … as` / props / events / if / slot grammar added (2015-2019, 3016,
- * 3017, 3019, 3020, 3022) ARE in it: each is one file's characters, the mirror consumes every one of
+ * 3017, 3019, 3020, 3022) ARE in it, and so are the `rows` table's (2020, 3023): each is one file's characters, the mirror consumes every one of
  * those productions token for token as FParser does, and says each refusal the compiler says there.
  */
 export const MAILBOX_SUPPRESSED: ReadonlySet<number> = new Set([
     1001, 1002, 1003, 1004, 1005,
-    2002, 2003, 2004, 2006, 2015, 2016, 2017, 2018, 2019,
-    3001, 3002, 3004, 3005, 3008, 3014, 3015, 3016, 3017, 3019, 3020, 3022,
+    2002, 2003, 2004, 2006, 2015, 2016, 2017, 2018, 2019, 2020,
+    3001, 3002, 3004, 3005, 3008, 3014, 3015, 3016, 3017, 3019, 3020, 3022, 3023,
     4007,
 ]);
 

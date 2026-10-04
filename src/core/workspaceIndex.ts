@@ -200,6 +200,16 @@ export function summarizeFile(file: string, text: string): FileSummary {
         });
     }
 
+    // A `rows` table's style clause is written once, in its header, for all its rows.
+    for (const table of structure.rowsTables ?? []) {
+        if (table.styleName && table.styleNameStart !== undefined) {
+            summary.styleUses.push({
+                file, name: table.styleName,
+                start: table.styleNameStart, end: table.styleNameStart + table.styleName.length,
+                line: table.styleNameLine!, column: table.styleNameColumn!,
+            });
+        }
+    }
     for (const style of structure.styles) {
         summary.styles.push({
             file, name: style.name,

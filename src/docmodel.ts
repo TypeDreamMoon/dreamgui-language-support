@@ -13,7 +13,7 @@ import { buildStructure, scopeAt as coreScopeAt, StructNode } from './core/struc
 export type Structure = ReturnType<typeof buildStructure>;
 
 export interface NodeScope {
-    kind: 'node' | 'component' | 'resources' | 'style' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines';
+    kind: 'node' | 'component' | 'resources' | 'style' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines' | 'rows';
     /** Node tag ("Text"), component name ("VerticalBox" or "/Script/..."), style name. */
     name: string;
     /** Node id, when the scope is a node. */

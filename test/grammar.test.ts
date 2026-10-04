@@ -642,3 +642,25 @@ test('every line of the real fixture gets at least the source scope', async () =
         }
     }
 });
+
+test('a rows table: the header keyword, type, style and columns; the rows are values', async () => {
+    const lines = await tokenize([
+        'Widget Root {',
+        '    rows nier.Row : ListRow (Label, Anchor.SizeDelta) {',
+        '        "City Ruins", (12, 4)',
+        '        "Factory",    @Gap { Kind = Count }',
+        '    }',
+        '    rows = 3',
+        '    rows Grid { }',
+        '}',
+    ]);
+    assertScope(lines, 1, 'rows', 'keyword.control.rows.dui');
+    assertScope(lines, 1, 'Row', 'entity.name.tag.dui');
+    assertScope(lines, 1, 'ListRow', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 1, 'Label', 'variable.other.property.dui');
+    assertScope(lines, 1, 'SizeDelta', 'variable.other.property.dui');
+    assertScope(lines, 2, '"City Ruins"', 'string.quoted.double.dui');
+    assertScope(lines, 3, 'Kind', 'variable.other.property.dui');
+    assertNoScope(lines, 5, 'rows', 'keyword.control.rows.dui');
+    assertNoScope(lines, 6, 'rows', 'keyword.control.rows.dui');
+});

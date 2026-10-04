@@ -111,6 +111,13 @@ export interface StructNode {
      * fill; one holding properties, components, `default` or a style is a declaration.
      */
     fillsSlot?: boolean;
+    /**
+     * A widget a `rows` table made, one per line: the line's first value, its key. The node is anonymous and its id
+     * is made from the key -- `<scope id>__<type>_<key>` -- rather than from a count. `start` / `line` / `column` are
+     * the line's first value and the type has no span of its own here (`tagEnd === start`): the type and the style
+     * are written once, in the table's header, which RowsTable describes.
+     */
+    rowKey?: string;
     /** branch: the condition as written (absent for `else`), as offsets into the source. */
     condition?: string;
     conditionStart?: number;
@@ -285,6 +292,11 @@ export interface PropertyStmt {
      * shorthand into something that does not parse.
      */
     shorthand?: 'fill';
+    /**
+     * A value a `rows` line gave its widget: `path` is the column, and `start` / `pathStart` / `valueStart` are all the
+     * cell -- the column's name is written once, in the table's header.
+     */
+    isRowCell?: boolean;
     /** Value span (op 'equals' only). */
     valueStart?: number;
     valueEnd?: number;
@@ -351,8 +363,28 @@ export interface UseDirective {
 }
 
 /** A block something can stand inside, for answering "what scope is this offset in". */
+/**
+ * The header of one `rows Type : Style (Column, Column) { … }` table: the type, the style and the columns, written
+ * once for all its rows. The rows themselves are ordinary children of the enclosing node (StructNode.rowKey).
+ */
+export interface RowsTable {
+    tag: string;
+    tagStart: number;
+    tagEnd: number;
+    line: number;
+    column: number;
+    styleName?: string;
+    styleNameStart?: number;
+    styleNameLine?: number;
+    styleNameColumn?: number;
+    columns: { name: string; start: number }[];
+    bodyStart?: number;
+    bodyEnd?: number;
+}
+
 export interface Scope {
-    kind: 'node' | 'namedSlot' | 'component' | 'style' | 'resources' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines';
+    kind: 'node' | 'namedSlot' | 'component' | 'style' | 'resources' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines'
+        | 'rows';
     /** Node type / component name / style name / loop keyword / 'slot' / 'if' | 'else if' | 'else' / '@slot'. */
     name: string;
     /** Node id, when the scope is a node (the made one for an unnamed node); slot name; loop variable. */
@@ -377,6 +409,8 @@ export interface StructureResult {
     props: PropDecl[];
     /** `events { … }` entries, in declaration order. */
     events: EventDecl[];
+    /** `rows` tables' headers, in source order. */
+    rowsTables?: RowsTable[];
     scopes: Scope[];
     diagnostics: DuiDiagnostic[];
     /** Every namespace-qualified style and resource name, for the index-aware DUI3021 / DUI3004 / DUI4007. */
@@ -460,7 +494,7 @@ class Parser {
 
     readonly result: StructureResult = {
         roots: [], styles: [], timelines: [], resources: [], resourceRefs: [], bindings: [], imports: [], props: [],
-        events: [], scopes: [], diagnostics: [], namespaceRefs: [],
+        events: [], rowsTables: [], scopes: [], diagnostics: [], namespaceRefs: [],
     };
 
     constructor(private readonly tokens: Token[], private readonly text: string) {}
@@ -1540,6 +1574,13 @@ class Parser {
             this.recover();
             return;
         }
+        // `rows Row : ListRow (Label, Description) { … }` -- a table of instances. Only before a type, an optional style
+        // clause and the '(' of a column list: a property called rows and a node whose type is called rows read as
+        // they always did.
+        if (this.isRowsHeader()) {
+            this.parseRows(node);
+            return;
+        }
         if (this.looksLikeProperty()) {
             const stmt = this.parseProperty(false);
             if (stmt) {
@@ -1551,6 +1592,237 @@ class Parser {
         if (child) {
             node.children.push(child);
         }
+    }
+
+    /** `rows`, then a type (dotted, `@`-led or a path), an optional `: Style`, then the '(' of the column list. */
+    private isRowsHeader(): boolean {
+        if (!this.checkKeyword('rows')) {
+            return false;
+        }
+        let ahead = 1;
+        if (this.peek(ahead).kind === 'at') {
+            ahead++;
+            if (this.peek(ahead).kind !== 'identifier') {
+                return false;
+            }
+        } else if (this.peek(ahead).kind !== 'identifier' && this.peek(ahead).kind !== 'assetPath') {
+            return false;
+        }
+        ahead++;
+        while (this.peek(ahead).kind === 'dot' && this.peek(ahead + 1).kind === 'identifier') {
+            ahead += 2;
+        }
+        if (this.peek(ahead).kind === 'colon') {
+            ahead++;
+            if (this.peek(ahead).kind !== 'identifier') {
+                return false;
+            }
+            ahead++;
+            while (this.peek(ahead).kind === 'dot' && this.peek(ahead + 1).kind === 'identifier') {
+                ahead += 2;
+            }
+        }
+        return this.peek(ahead).kind === 'openParen';
+    }
+
+    /**
+     * ParseRows: `rows Row : ListRow (Label, Description) { "City Ruins", "…" … }`, read into the ordinary unnamed
+     * children its lines stand for -- the same shape the compiler gives them, ids included -- and one RowsTable for
+     * the header the lines share. DUI2020 for what one file settles: a column list that is not names, a column named
+     * twice, a row with the wrong number of values. A missing comma is the compiler's DUI2001 to word.
+     */
+    private parseRows(parent: StructNode): void {
+        const keyword = this.current();
+        this.advance(); // 'rows'
+
+        const typeToken = this.current();
+        const resourceType = this.check('at');
+        if (resourceType) {
+            this.advance();
+        }
+        let tag = resourceType ? `@${this.current().text}` : this.current().text;
+        let tagEnd = this.current().end;
+        this.advance();
+        while (this.check('dot') && this.peek(1).kind === 'identifier') {
+            this.advance();
+            tag = `${tag}.${this.current().text}`;
+            tagEnd = this.current().end;
+            this.advance();
+        }
+        const table: RowsTable = {
+            tag, tagStart: typeToken.start, tagEnd, line: typeToken.line, column: typeToken.column, columns: [],
+        };
+        if (resourceType) {
+            const name = tag.slice(1);
+            this.result.resourceRefs.push({
+                name, line: typeToken.line, column: typeToken.column, start: typeToken.start, end: tagEnd, nodeType: true,
+            });
+            this.noteNamespaceReference(name, 'resource', typeToken, tagEnd);
+        }
+        if (this.check('colon')) {
+            this.advance();
+            if (this.check('identifier')) {
+                const first = this.current();
+                const qualified = this.parseQualifiedName();
+                table.styleName = qualified.name;
+                table.styleNameStart = first.start;
+                table.styleNameLine = first.line;
+                table.styleNameColumn = first.column;
+                this.noteNamespaceReference(qualified.name, 'style', first, qualified.end);
+            }
+        }
+
+        this.advance(); // '('
+        let columnsRead = false;
+        const seen = new Set<string>();
+        for (;;) {
+            if (!this.check('identifier')) {
+                this.error(2020, `expected a property name in the column list, found '${this.describeCurrent()}'`, this.current());
+                break;
+            }
+            const first = this.current();
+            let name = first.text;
+            this.advance();
+            while (this.check('dot') && this.peek(1).kind === 'identifier') {
+                this.advance();
+                name += `.${this.current().text}`;
+                this.advance();
+            }
+            if (seen.has(foldName(name))) {
+                this.error(2020, `'${name}' is already a column of this table: every row would write it twice`, first);
+            }
+            seen.add(foldName(name));
+            table.columns.push({ name, start: first.start });
+            if (this.check('comma')) {
+                this.advance();
+                continue;
+            }
+            if (this.check('closeParen')) {
+                this.advance();
+                columnsRead = true;
+                break;
+            }
+            this.error(2020, `expected ',' or ')' in the column list, found '${this.describeCurrent()}'`, this.current());
+            break;
+        }
+        if (!columnsRead) {
+            this.skipPastCloseParen();
+        }
+        if (!this.check('openBrace')) {
+            this.error(2020, "a 'rows' table is written 'rows Type : Style (Column, Column) { values, values }'", keyword);
+            this.recover();
+            return;
+        }
+        const open = this.current();
+        this.advance();
+        if (!columnsRead || this.isTooDeep(open)) {
+            this.skipBalancedBlockBody();
+            return;
+        }
+        table.bodyStart = this.current().start;
+        this.result.rowsTables!.push(table);
+        this.nestingDepth++;
+        try {
+            for (;;) {
+                this.skipSeparators();
+                if (this.check('closeBrace')) {
+                    table.bodyEnd = this.current().start;
+                    this.advance();
+                    break;
+                }
+                if (this.atEnd()) {
+                    this.error(2002, "this '{' never reaches its '}'", open);
+                    table.bodyEnd = this.previousEnd();
+                    break;
+                }
+                const before = this.index;
+                this.parseRow(parent, table);
+                if (this.index === before) {
+                    this.advance();
+                }
+            }
+        } finally {
+            this.nestingDepth--;
+        }
+        this.result.scopes.push({ kind: 'rows', name: table.tag, bodyStart: table.bodyStart, bodyEnd: table.bodyEnd! });
+    }
+
+    /** One line of a `rows` table: its values, in column order, and the block it may end in. */
+    private parseRow(parent: StructNode, table: RowsTable): void {
+        const first = this.current();
+        const row: StructNode = {
+            kind: 'node', tag: table.tag, id: '', anonymous: true,
+            line: first.line, column: first.column, start: first.start, tagEnd: first.start,
+            styleName: table.styleName,
+            components: [], children: [], properties: [],
+        };
+        let count = 0;
+        let keyText = '';
+        for (;;) {
+            const cell = this.current();
+            const valueStart = cell.start;
+            if (!this.parseValue()) {
+                this.recover();
+                return;
+            }
+            if (count === 0) {
+                // The compiler's Raw: a string unescaped, a colour's digits, a resource's name, a tuple's text. Only the
+                // characters an id can hold survive into the id, so the tuple's tokens joined stand in for its slice.
+                keyText = this.textBetween(cell, valueStart);
+            }
+            if (count < table.columns.length) {
+                const stmt: PropertyStmt = {
+                    path: table.columns[count].name, pathStart: valueStart, start: valueStart, end: this.previousEnd(),
+                    op: 'equals', isSlot: false, isRowCell: true, valueStart, valueEnd: this.previousEnd(),
+                };
+                this.anchors.set(stmt, cell);
+                row.properties.push(stmt);
+            }
+            count++;
+            if (this.check('comma')) {
+                this.advance();
+                continue;
+            }
+            break;
+        }
+        if (!this.check('separator') && !this.check('closeBrace') && !this.check('openBrace') && !this.atEnd()) {
+            this.recover(); // "expected ',' between a row's values", the compiler's DUI2001
+            return;
+        }
+        if (count !== table.columns.length) {
+            this.error(2020, `this row has ${count} value${count === 1 ? '' : 's'} for ${table.columns.length} column${table.columns.length === 1 ? '' : 's'} (${table.columns.map((column) => column.name).join(', ')})`, first);
+            this.recover();
+            return;
+        }
+        row.rowKey = keyText.length > 0 ? keyText : ' ';
+        if (this.check('openBrace')) {
+            const open = this.current();
+            this.advance();
+            row.bodyStart = this.current().start;
+            this.parseNodeBody(row, open);
+            row.bodyEnd = this.previousStart();
+        }
+        parent.children.push(row);
+    }
+
+    /** The first value's text as the compiler's Raw would make the key: its token's text, or a tuple's tokens joined. */
+    private textBetween(first: Token, valueStart: number): string {
+        if (first.kind === 'at') {
+            return this.tokens[this.indexOfStart(valueStart) + 1]?.text ?? '';
+        }
+        if (first.kind !== 'openParen') {
+            return first.text;
+        }
+        return this.text.slice(valueStart, this.previousEnd());
+    }
+
+    private indexOfStart(start: number): number {
+        for (let at = this.index - 1; at >= 0; at--) {
+            if (this.tokens[at].start === start) {
+                return at;
+            }
+        }
+        return this.index;
     }
 
     /**
@@ -2511,9 +2783,16 @@ class Parser {
             type += isIdentifierChar(node.tag.charCodeAt(at)) ? node.tag[at] : '_';
         }
         const scope = scopeId.length === 0 ? 'Root' : scopeId;
-        const count = counts.get(foldName(type)) ?? 0;
-        counts.set(foldName(type), count + 1);
-        let id = `${scope}__${type}${count}`;
+        // A `rows` line is named by its key instead of a count, so it keeps its id when a row is inserted before it.
+        const keyPart = makeRowKeyIdPart(node.rowKey ?? '');
+        let id: string;
+        if (keyPart.length > 0) {
+            id = `${scope}__${type}_${keyPart}`;
+        } else {
+            const count = counts.get(foldName(type)) ?? 0;
+            counts.set(foldName(type), count + 1);
+            id = `${scope}__${type}${count}`;
+        }
 
         // The one length rule the lexer holds every written name to, held to a made one: a chain of unnamed parents or
         // a long asset path can make a name an FName cannot hold. Cut short enough to bump, as the compiler cuts it.
@@ -2532,6 +2811,11 @@ class Parser {
             let bump = 1;
             while (taken.has(foldName(`${id}_${bump}`))) {
                 bump++;
+            }
+            if (keyPart.length > 0 && report) {
+                this.warning(3023,
+                    `this row's first value makes the id '${id}', which another row (or node) already has: it becomes '${id}_${bump}', which moves when the rows are reordered -- give the rows distinct first values`,
+                    this.headerAnchor(node));
             }
             id = `${id}_${bump}`;
         }
@@ -2600,10 +2884,19 @@ class Parser {
             visit(this.result.roots[0], 0);
         }
 
+        for (const table of this.result.rowsTables ?? []) {
+            if (table.styleName && table.styleNameStart !== undefined && !table.styleName.includes('.')
+                && !this.findStyle(table.styleName)) {
+                this.error(3004, `'${table.styleName}' names a style this file does not declare`, {
+                    line: table.styleNameLine!, column: table.styleNameColumn!,
+                    start: table.styleNameStart, end: table.styleNameStart + table.styleName.length,
+                });
+            }
+        }
         for (const node of allNodes) {
             // A namespaced style is the index's to judge: its library's styles are not in this file, and when the
             // namespace itself is unknown the compiler says that, once, instead (DUI3021).
-            if (node.styleName && !node.styleName.includes('.') && !this.findStyle(node.styleName)) {
+            if (node.styleName && node.rowKey === undefined && !node.styleName.includes('.') && !this.findStyle(node.styleName)) {
                 this.error(3004, `'${node.styleName}' names a style this file does not declare`, {
                     line: node.styleNameLine ?? node.line, column: node.styleNameColumn ?? node.column,
                     start: node.styleNameStart ?? node.start,
@@ -2743,6 +3036,29 @@ class Parser {
         const end = stmt.shorthand ? stmt.end : Math.max(token.end, stmt.pathStart + stmt.path.length);
         return { line: token.line, column: token.column, start: token.start, end };
     }
+}
+
+/**
+ * The part of a row's id its key makes, as the compiler makes it (MakeRowKeyIdPart): every run of characters an id
+ * cannot hold one '_', none at either end, at most 32 characters. Empty when nothing survives -- the row is then
+ * counted like any unnamed widget.
+ */
+export function makeRowKeyIdPart(key: string): string {
+    let part = '';
+    for (let at = 0; at < key.length; at++) {
+        if (isIdentifierChar(key.charCodeAt(at))) {
+            part += key[at];
+        } else if (part.length > 0 && !part.endsWith('_')) {
+            part += '_';
+        }
+    }
+    if (part.length > 32) {
+        part = part.slice(0, 32);
+    }
+    while (part.endsWith('_')) {
+        part = part.slice(0, -1);
+    }
+    return part;
 }
 
 function ellipsize(text: string, maxLength = 16): string {

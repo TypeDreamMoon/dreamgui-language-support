@@ -243,5 +243,15 @@
       "}"
     ],
     "description": "An unnamed layout container: nothing refers to it by name, so it needs no id"
+  },
+  "Rows table": {
+    "prefix": "rows",
+    "body": [
+      "rows ${1:Row} : ${2:Style} (${3:Label}, ${4:Description}) {",
+      "    \"${5:First}\",  \"${6:what it is}\"",
+      "    \"${7:Second}\", \"${8:what it is}\"",
+      "}"
+    ],
+    "description": "A table of instances: the type, the style and the columns once, then one line per instance (each named from its first value)"
   }
 }

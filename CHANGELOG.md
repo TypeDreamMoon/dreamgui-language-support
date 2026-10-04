@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0 — 2026-10-04
+
+`rows`: the plugin's table of instances (DreamGUI main `86c86160`).
+
+- **`rows Row : ListRow (Label, Description) { "City Ruins", "…" … }` is read as the compiler reads it**: one unnamed
+  child per line, in place among its siblings, each named from its first value -- `Page_0__Row_City_Ruins`, the key
+  cleaned and cut to 32 characters, bumped with a DUI3023 warning when two keys collide, counted when nothing of the
+  key survives -- so the outline, the index and every id-based feature see the same widgets the compiler builds. A
+  line may end in a block of its own. A column list that is not names, a column named twice, or a row with the wrong
+  number of values is DUI2020, and a row that does not read makes no widget.
+- **The header is described once** (`rowsTables`): its style is judged, renamed and indexed once rather than once per
+  row, and the semantic tokens colour its type, its style and its columns (as properties) once.
+- **Highlighting**: `rows`, the type, the style and the column names; the rows are values, a row's block a node body.
+  `rows = 3` and `rows Grid { }` stay what they were.
+- **The formatter keeps a table a table**: a row stays one line, and the spacing after a row's commas and before the
+  block it ends in is the author's -- a table aligned into columns is the point of writing one. The column list keeps
+  its space (`ListRow (Label, …)` is no call).
+- **Code table**: DUI2020 MalformedRows and DUI3023 DuplicateRowKey. A `rows` snippet.
+
 ## 0.8.1 — 2026-10-04
 
 - **Indented comments are comments again.** A node header may name its type by path, and the path

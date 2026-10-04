@@ -12,6 +12,7 @@
     { "include": "#timeline-external" },
     { "include": "#timeline-block" },
     { "include": "#style-declaration" },
+    { "include": "#rows-header" },
     { "include": "#slot-declaration" },
     { "include": "#loop-header" },
     { "include": "#conditional" },
@@ -213,6 +214,24 @@
         "3": { "name": "punctuation.separator.inheritance.dui" },
         "4": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] }
       }
+    },
+    "rows-header": {
+      "comment": "`rows Type : Style (Column, Column) {` -- a table of instances: the type, the style and the columns once, then one line of values per instance. Only before a type and a column list, as the compiler reads it: `rows = 3` and `rows Grid { }` stay what they were. The rows themselves are values (`#values`), and a row's own block is a node body.",
+      "begin": "(?:^|(?<=[{;]))\\s*(rows)\\s+(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?\\s*(\\()",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.rows.dui" },
+        "2": { "name": "entity.name.tag.dui", "patterns": [ { "include": "#qualifier" } ] },
+        "3": { "name": "punctuation.separator.style.dui" },
+        "4": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] },
+        "5": { "name": "punctuation.section.parens.begin.dui" }
+      },
+      "end": "(\\))",
+      "endCaptures": { "1": { "name": "punctuation.section.parens.end.dui" } },
+      "patterns": [
+        { "include": "#comments" },
+        { "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*", "name": "variable.other.property.dui" },
+        { "match": ",", "name": "punctuation.separator.comma.dui" }
+      ]
     },
     "slot-declaration": {
       "comment": "`slot Footer`, `slot Rows default : RowList {`, `slot Old (was: Older)` -- a declaration -- and `slot Detail {` in a host, a fill. The clauses come in any order, as the parser takes them, so the header is a region that ends at its `{` or the end of the line.",

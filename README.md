@@ -12,6 +12,10 @@ Language support for DreamGUI `.dui` widget hierarchies.
   variables they become, styles as classes, resources as readonly constants, `->` events and
   handlers, loop variables (`Item.Member` in an `each` body colours as the parameter it uses),
   calls as functions, bare names as variables, components.
+- **`rows` tables** (`rows Row : ListRow (Label, Description) { "City Ruins", "…" … }`) are read as the compiler
+  reads them: one unnamed widget per line, named from its first value, with DUI2020 / DUI3023 for a table that does
+  not read and two rows whose keys collide. The header is highlighted and its style judged once; the formatter keeps
+  each row on its line and the author's column alignment.
 - **The component syntax**, highlighted: `use "Row.dui" as Row`, `use /Game/UI/WBP_Row as Row` and
   `use "Lib.dui" as nier`; `props { … }` and `events { … }` with their type words; `OnClick -> emit
   Picked(Index)`; `slot Rows default : RowList { … }` and a host's `slot Detail { … }`; containers as

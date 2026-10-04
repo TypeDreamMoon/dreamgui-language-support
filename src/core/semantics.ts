@@ -108,6 +108,14 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
     }
 
     const visit = (node: StructNode): void => {
+        if (node.rowKey !== undefined) {
+            // A `rows` line: its type and style are the table header's, coloured once below; what stands at the line's
+            // start is its first value, which the grammar colours.
+            for (const child of node.children) {
+                visit(child);
+            }
+            return;
+        }
         if (node.kind === 'loop') {
             // The loop variable is a parameter: it exists to be repeated over, not bound to.
             push(node.idStart, node.id.length, 'parameter', ['declaration']);
@@ -144,6 +152,24 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
     };
     for (const root of structure.roots) {
         visit(root);
+    }
+
+    for (const table of structure.rowsTables ?? []) {
+        const dot = table.tag.indexOf('.');
+        if (dot > 0 && namespaces.has(fold(table.tag.slice(0, dot)))) {
+            const tail = table.tag.length - dot - 1;
+            push(table.tagStart, dot, 'namespace');
+            push(table.tagEnd - tail, tail, 'type');
+        } else if (aliases.has(fold(table.tag))) {
+            push(table.tagStart, table.tagEnd - table.tagStart, 'type');
+        }
+        if (table.styleName && !pushQualified(table.styleName, table.styleNameStart, 'class')) {
+            push(table.styleNameStart, table.styleName.length, 'class');
+        }
+        for (const column of table.columns) {
+            // A column is the property every row writes.
+            push(column.start, column.name.length, 'property');
+        }
     }
 
     for (const style of structure.styles) {

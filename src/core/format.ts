@@ -165,6 +165,15 @@ function layout(text: string, options: FormatOptions): string {
         if (kind === 'comma' || kind === 'closeParen' || kind === 'dot' || kind === 'semicolon') {
             return '';
         }
+        if (token && (shape.alignedStarts.has(token.start) || (kind === 'openBrace' && shape.rowEnds.has(previous.end)))) {
+            // A `rows` table's values after the first, and the block a row ends in: the author's spacing is kept, as
+            // long as it is spaces on the line. A table aligned into columns is the point of writing one.
+            const written = text.slice(previous.end, token.start);
+            return /^[ 	]+$/.test(written) ? written : ' ';
+        }
+        if (kind === 'openParen' && shape.rowsParenAfter.has(previous.end)) {
+            return ' '; // `rows Row : ListRow (Label, Description)` -- a column list, not a call to ListRow
+        }
         if (unaryMinus && (kind === 'identifier' || kind === 'openParen')) {
             // `-Count()`, `-(A + B)`: the scanner only reads a '-' with a word or a '(' straight after it as a
             // negation, and `- Count()` read back is a malformed number -- which the guard rail would catch, by
@@ -262,7 +271,7 @@ function layout(text: string, options: FormatOptions): string {
             if (next && !next.comment && next.token.kind === 'closeBrace') {
                 // An empty block stays on its line: `+ Overlay {}` is how this language writes
                 // "this component has no properties", and splitting it says nothing extra.
-                append('{', gapBefore('openBrace', false));
+                append('{', gapBefore('openBrace', false, token));
                 append('}', '');
                 previous = next.token;
                 index++;
@@ -274,7 +283,7 @@ function layout(text: string, options: FormatOptions): string {
                 }
                 continue;
             }
-            append('{', gapBefore('openBrace', false));
+            append('{', gapBefore('openBrace', false, token));
             previous = token;
             unaryMinus = false;
             if (!inlineBlock && staysOnOneLine(pieces, index)) {
@@ -379,15 +388,40 @@ function merge(tokens: Token[], comments: CommentSpan[]): Piece[] {
  * there, and a token-level guess would be fooled by `Number Gap = 4`, a props line whose second word is followed by
  * an '=' too.
  */
-function statementShape(text: string): { statementStarts: Set<number>; conditionStarts: Set<number> } {
+function statementShape(text: string): {
+    statementStarts: Set<number>; conditionStarts: Set<number>;
+    alignedStarts: Set<number>; rowEnds: Set<number>; rowsParenAfter: Set<number>;
+} {
     const structure = buildStructure(text);
     const statementStarts = new Set<number>();
     const conditionStarts = new Set<number>();
+    /** A `rows` line's values after its first: their spacing is the author's (see gapBefore). */
+    const alignedStarts = new Set<number>();
+    /** Where a `rows` line's last value ends, so the block it may end in keeps its spacing too. */
+    const rowEnds = new Set<number>();
+    /** Where the token before a `rows` header's column list ends: that '(' is no call. */
+    const rowsParenAfter = new Set<number>();
     const addAll = (statements: readonly PropertyStmt[] | undefined): void => {
+        const cells = (statements ?? []).filter((statement) => statement.isRowCell);
+        cells.forEach((cell, at) => {
+            if (at > 0) {
+                alignedStarts.add(cell.start);
+            }
+            if (at === cells.length - 1) {
+                rowEnds.add(cell.end);
+            }
+        });
         for (const statement of statements ?? []) {
-            statementStarts.add(statement.start);
+            // A row's values are one statement's parts, not statements sharing a line.
+            if (!statement.isRowCell) {
+                statementStarts.add(statement.start);
+            }
         }
     };
+    for (const table of structure.rowsTables ?? []) {
+        rowsParenAfter.add(table.styleName && table.styleNameStart !== undefined
+            ? table.styleNameStart + table.styleName.length : table.tagEnd);
+    }
     const visit = (node: StructNode): void => {
         addAll(node.properties);
         for (const component of node.components) {
@@ -405,7 +439,7 @@ function statementShape(text: string): { statementStarts: Set<number>; condition
             addAll(component.properties);
         }
     }
-    return { statementStarts, conditionStarts };
+    return { statementStarts, conditionStarts, alignedStarts, rowEnds, rowsParenAfter };
 }
 
 /**
