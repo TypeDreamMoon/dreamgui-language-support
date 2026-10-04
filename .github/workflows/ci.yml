@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, not 20: `npm test` is `node --test "out/test/**/*.test.js"`, and node only expands a glob
+          # given to --test from 21 on -- 20 looks for a file literally named `**` and fails the job.
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm test
