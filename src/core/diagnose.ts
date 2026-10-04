@@ -72,11 +72,25 @@ export function judgeDocument(input: JudgeInput): CoreDiagnostic[] {
     const importedResources = new Set<string>();
     const index = input.index;
     if (index) {
-        for (const directive of structure.imports) {
-            const matches = index.resolveImportSpelling(directive.path);
-            if (matches.length !== 1) {
+        // TRANSITIVELY, which is what the compiler does and what one hop did not.
+        // ParseUseDeclaration merges the imported file's OWN ImportedStyles and ImportedResources
+        // into the importer alongside its local ones, so `A uses B` and `B uses C` puts C's styles
+        // in A's scope -- which is the entire point of a layered style library. Stopping at the
+        // first hop made every second-hand name a false DUI3004 / DUI4007 on a file that compiles.
+        //
+        // Breadth-first over spellings with a visited set of resolved paths: the import graph is
+        // allowed to be a diamond (the compiler merges the same library twice and shrugs), and a
+        // cycle is an ImportFailed the compiler reports on its own -- neither may hang the editor.
+        const pending = [...structure.imports.map((directive) => directive.path)];
+        const visited = new Set<string>();
+        for (let at = 0; at < pending.length; at += 1) {
+            const matches = index.resolveImportSpelling(pending[at]);
+            // Only a UNIQUE resolution is trusted, exactly as before: reporting less than the
+            // compiler is allowed, reporting differently is not.
+            if (matches.length !== 1 || visited.has(fold(matches[0]))) {
                 continue;
             }
+            visited.add(fold(matches[0]));
             const summary = index.summaryOf(matches[0]);
             if (!summary) {
                 continue;
@@ -87,6 +101,7 @@ export function judgeDocument(input: JudgeInput): CoreDiagnostic[] {
             for (const resource of summary.resources) {
                 importedResources.add(fold(resource.name));
             }
+            pending.push(...summary.imports);
         }
     }
     /**

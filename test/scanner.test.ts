@@ -201,6 +201,21 @@ test('a - after an operand is subtraction; anywhere else it starts a number', ()
     assert.deepEqual(codes('A = -'), [1004]);
 });
 
+test('a - with a word or a ( after it is negation, so `<- -Count()` is not a malformed number', () => {
+    // The third reading, and the one the port dropped: DreamUISourceFile.cpp's bNegationFollows.
+    // Without it lexNumber's trailing sweep swallowed the identifier and reported DUI1004 on a line
+    // the compiler accepts -- a red squiggle the extension is never allowed to raise.
+    assert.deepEqual(codes('Opacity <- -Count()'), []);
+    assert.deepEqual(nonSeparator('Opacity <- -Count()').map((token) => token.kind),
+        ['identifier', 'arrow', 'minus', 'identifier', 'openParen', 'closeParen']);
+    assert.deepEqual(codes('Opacity <- -(A + B)'), []);
+    assert.deepEqual(nonSeparator('Opacity <- -(A + B)').map((token) => token.kind),
+        ['identifier', 'arrow', 'minus', 'openParen', 'identifier', 'plus', 'identifier', 'closeParen']);
+    // Still narrow: a digit after the minus is a number's sign, as it always was.
+    assert.deepEqual(nonSeparator('Opacity <- -5').map((token) => token.kind),
+        ['identifier', 'arrow', 'number']);
+});
+
 test('a < against a negative number needs the space: `a < -1` compares, `a <-1` binds', () => {
     assert.deepEqual(nonSeparator('a < -1').map((token) => token.kind),
         ['identifier', 'less', 'number']);
@@ -213,6 +228,22 @@ test('<< is two less-thans now, and <<- still surfaces the arrow', () => {
         ['identifier', 'less', 'less', 'identifier']);
     assert.deepEqual(nonSeparator('A <<- B').map((token) => token.kind),
         ['identifier', 'less', 'arrow', 'identifier']);
+});
+
+test('a / that abuts an identifier separates node ids; anywhere else it starts an asset path', () => {
+    // The timeline grammar's one new token. Without it `Row/Title` reads as the identifier `Row`
+    // followed by the asset path `/Title.RenderOpacity`, and neither the compiler nor this mirror
+    // can see one path -- DreamUISourceFile.cpp grew the same rule at the same time.
+    assert.deepEqual(nonSeparator('Row/Title.RenderOpacity : 0 = 1').map((token) => token.kind),
+        ['identifier', 'slash', 'identifier', 'dot', 'identifier', 'colon', 'number', 'equals', 'number']);
+    // A space is enough to make it a path again, which is what keeps `class /Game/UI/X` a path.
+    assert.deepEqual(nonSeparator('class /Game/UI/WBP_X').map((token) => token.kind),
+        ['identifier', 'assetPath']);
+    assert.deepEqual(nonSeparator('Content = /Game/UI/WBP_X').map((token) => token.kind),
+        ['identifier', 'equals', 'assetPath']);
+    // And the comment check still comes first, so an identifier followed by `//` is a comment.
+    assert.deepEqual(nonSeparator('FontSize = 24 // note').map((token) => token.kind),
+        ['identifier', 'equals', 'number']);
 });
 
 test('a comment can contain an asset path without producing a path token', () => {

@@ -38,6 +38,16 @@ export type TokenKind =
     | 'twoWayArrow'
     | 'plus'
     | 'at'
+    /**
+     * `/` between two node ids, as `Row/Title` in a timeline track line.
+     *
+     * Emitted only when the '/' ABUTS the identifier before it, which is a position no asset path
+     * can occupy: a path always begins a value or a node type, so something non-identifier always
+     * precedes it (`class /Game/UI/X` has the space that keeps it a path). The compiler's lexer
+     * grew the same rule for the same reason -- without it `Row/Title` reads as the identifier
+     * `Row` followed by the asset path `/Title`, and neither side can see one path.
+     */
+    | 'slash'
     // The expression operators, born when `<-` learned expressions. A '-' is only ever 'minus'
     // after an operand -- see the run() dispatch; anywhere else it starts a number.
     | 'minus'
@@ -144,7 +154,10 @@ function isInlineWhitespace(code: number): boolean {
 
 /** Keywords, and therefore the words a node id may not be. Case sensitive, as the compiler is. */
 export const RESERVED_WORDS: ReadonlySet<string> =
-    new Set(['class', 'style', 'resources', 'slot', 'for', 'each', 'in', 'was', 'use']);
+    new Set(['class', 'style', 'resources', 'slot', 'for', 'each', 'in', 'was', 'use',
+        // The timeline grammar's three, added with it: the compiler reserves them, so a node named
+        // `timeline` is a DUI3002 there and must be one here too.
+        'timeline', 'external', 'ease']);
 
 /**
  * `NAME_SIZE` from the engine's UnrealNames.h -- the one length rule this grammar has, and the
@@ -204,6 +217,12 @@ class Lexer {
                     this.skipBlockComment();
                     continue;
                 }
+                // ... and after the comments, the node-path separator. See the 'slash' kind.
+                const previousToken = this.tokens.length > 0 ? this.tokens[this.tokens.length - 1] : undefined;
+                if (previousToken && previousToken.kind === 'identifier' && previousToken.end === this.offset) {
+                    this.emitPunctuation('slash', 1);
+                    continue;
+                }
                 this.lexAssetPath();
                 continue;
             }
@@ -226,7 +245,20 @@ class Lexer {
                 const previous = this.tokens.length > 0 ? this.tokens[this.tokens.length - 1].kind : undefined;
                 const previousIsOperand = previous === 'identifier' || previous === 'number'
                     || previous === 'string' || previous === 'hexColor' || previous === 'closeParen';
-                if (previousIsOperand) {
+                // ... and a '-' with a WORD or a '(' after it is NEGATION, which is the third
+                // reading this rule had no room for. Without it `<- -Count()` went to lexNumber,
+                // whose trailing sweep swallowed the identifier and reported the whole thing as a
+                // malformed number -- a DUI1004 squiggle on a line the compiler accepts, which is
+                // the one thing this extension is not allowed to do. DreamUISourceFile.cpp grew
+                // `bNegationFollows` for exactly this and the port was missed.
+                //
+                // Narrow on purpose, and character for character the C++ rule: a digit, a '.', a
+                // line ending or anything else still goes to lexNumber, so `A = -` keeps reporting
+                // MalformedNumber rather than turning into a grammatical complaint about a token
+                // the author never thought of as one.
+                const afterMinus = this.peekCode(1);
+                const negationFollows = isIdentifierStart(afterMinus) || afterMinus === 0x28 /* ( */;
+                if (previousIsOperand || negationFollows) {
                     this.emitPunctuation('minus', 1);
                 } else {
                     this.lexNumber();

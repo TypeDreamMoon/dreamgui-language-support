@@ -418,3 +418,45 @@ test('the real SettingsPanel.dui produces zero structural diagnostics', () => {
     assert.equal(built.roots[0].id, 'Root');
     assert.equal(built.styles.length, 1);
 });
+
+test('a timeline block is recognised whole and judged by nobody here', () => {
+    // The extension may report LESS than the compiler and never differently, so the one thing this
+    // layer owes a timeline is not painting its contents red. Track lines resolve against the tree
+    // and the engine's reflection, neither of which one file's characters can see.
+    const structure = buildStructure(`class /Game/UI/WBP_X
+
+timeline Pulse {
+    duration = 0.6
+    loop     = PingPong
+    RenderScale : 0.0 = (1, 1, 1), 0.3 = (1.25, 1.25, 1) ease InOutQuad
+    Row/Icon.Color : 0.0 = #FFFFFF, 0.6 = #FFC800
+    @0.3 -> Landed
+}
+
+timeline Celebrate external
+
+Widget Root {
+    Widget Row {
+        Image Icon { }
+    }
+}
+`);
+    assert.deepEqual(structure.diagnostics, []);
+    assert.equal(structure.timelines.length, 2);
+    assert.equal(structure.timelines[0].name, 'Pulse');
+    assert.equal(structure.timelines[0].external, false);
+    assert.equal(structure.timelines[1].name, 'Celebrate');
+    assert.equal(structure.timelines[1].external, true);
+    // And the tree beside it is still the tree: a timeline is file scope, level with `style`.
+    assert.equal(structure.roots.length, 1);
+    assert.equal(structure.roots[0].id, 'Root');
+});
+
+test('two timelines of one name is DUI3016, the same shape a duplicate style is', () => {
+    const structure = buildStructure(`timeline T { }
+timeline T { }
+Widget Root { }
+`);
+    assert.deepEqual(structure.diagnostics.map((d) => d.code), [3016]);
+    assert.equal(structure.timelines.length, 1);
+});

@@ -92,6 +92,30 @@ test('a style may inherit a base an import brought in', () => {
         indexWith({ 'I:/proj/DUI/Styles/Common.dui': LIBRARY })), ['DUI3004']);
 });
 
+test('an import is followed transitively, the way ParseUseDeclaration merges one', () => {
+    // A layered style library: Common uses Base, and the consumer only names Common. The compiler
+    // merges Base's styles and resources into Common's AST and then Common's whole AST -- imports
+    // included -- into the consumer's, so `Heading` and `@Accent` are in scope two hops away. One
+    // hop of following made every second-hand name a false DUI3004 / DUI4007 on a file that builds.
+    const consumer = CONSUMER.replace('use "Styles/Common.dui"', 'use "Styles/Layered.dui"');
+    const index = indexWith({
+        'I:/proj/DUI/Styles/Base.dui': LIBRARY,
+        'I:/proj/DUI/Styles/Layered.dui': 'use "Styles/Base.dui"\n\nstyle Layered {\n    FontSize = 9\n}\n',
+    });
+    assert.deepEqual(codes(consumer, index), []);
+});
+
+test('a cycle of uses is walked once and does not hang the judge', () => {
+    // The compiler refuses this with an ImportFailed of its own; what this asserts is only that the
+    // follow terminates, because a visited set is the difference between a diagnostic and an editor
+    // that stops responding while the author is still typing the second `use`.
+    const index = indexWith({
+        'I:/proj/DUI/Styles/A.dui': 'use "Styles/B.dui"\n\nstyle Heading {\n    FontSize = 22\n}\n',
+        'I:/proj/DUI/Styles/B.dui': 'use "Styles/A.dui"\n\nresources {\n    Color Accent = #FF6600\n}\n',
+    });
+    assert.deepEqual(codes(CONSUMER.replace('use "Styles/Common.dui"', 'use "Styles/A.dui"'), index), []);
+});
+
 test('an import exempts by name, not by spelling: the fold is case insensitive', () => {
     const index = indexWith({ 'I:/proj/DUI/Styles/Common.dui': LIBRARY });
     const shouting = CONSUMER.replace('Heading', 'HEADING').replace('@Accent', '@ACCENT');

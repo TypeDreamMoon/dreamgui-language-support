@@ -78,6 +78,24 @@ export interface StyleDecl {
     properties: PropertyStmt[];
 }
 
+/**
+ * `timeline Pulse { … }` or `timeline Celebrate external`.
+ *
+ * Recorded, never judged: the block's contents resolve against the TREE (a node path, an Interp
+ * property, a curve name out of the engine's enum), and this layer sees one file's characters. What
+ * it has to do is recognise the shape so nothing inside a valid block is painted as a mistake --
+ * which is the extension's one rule, that it may report less than the compiler but never differently.
+ */
+export interface TimelineDecl {
+    name: string;
+    external: boolean;
+    line: number;
+    column: number;
+    nameStart: number;
+    bodyStart?: number;
+    bodyEnd?: number;
+}
+
 export interface ResourceDecl {
     /** The type keyword as written (Color, Number, ...). Not validated here. */
     type: string;
@@ -164,6 +182,8 @@ export interface StructureResult {
     /** Top-level nodes. A well-formed file has exactly one. */
     roots: StructNode[];
     styles: StyleDecl[];
+    /** `timeline` blocks, in declaration order. See TimelineDecl for why the bodies are not parsed. */
+    timelines: TimelineDecl[];
     resources: ResourceDecl[];
     resourceRefs: ResourceRef[];
     bindings: BindingRef[];
@@ -194,7 +214,7 @@ class Parser {
     private reportedNestingLimit = false;
 
     readonly result: StructureResult = {
-        roots: [], styles: [], resources: [], resourceRefs: [], bindings: [], imports: [], scopes: [], diagnostics: [],
+        roots: [], styles: [], timelines: [], resources: [], resourceRefs: [], bindings: [], imports: [], scopes: [], diagnostics: [],
     };
 
     constructor(private readonly tokens: Token[]) {}
@@ -277,6 +297,8 @@ class Parser {
                 this.parseUseDirective();
             } else if (this.checkKeyword('style') && this.peek(1).kind === 'identifier') {
                 this.parseStyleDeclaration();
+            } else if (this.checkKeyword('timeline') && this.peek(1).kind === 'identifier') {
+                this.parseTimelineDeclaration();
             } else if (this.checkKeyword('resources')) {
                 this.parseResourcesBlock();
             } else if (this.looksLikeProperty()) {
@@ -397,6 +419,58 @@ class Parser {
             return; // dropped, so the first one keeps naming the style for everybody downstream
         }
         this.result.styles.push(style);
+    }
+
+    /**
+     * The timeline header, and the block skipped whole.
+     *
+     * Skipped rather than parsed line by line, deliberately: a track line's meaning is entirely
+     * about the tree and the engine's reflection, so every judgement worth making about one is the
+     * compiler's. Walking in to report shapes this layer cannot check would be the extension
+     * inventing refusals, which is the one thing it is not allowed to do.
+     */
+    private parseTimelineDeclaration(): void {
+        const keyword = this.current();
+        this.advance(); // 'timeline'
+
+        const nameToken = this.current();
+        const timeline: TimelineDecl = {
+            name: nameToken.text, external: false,
+            line: keyword.line, column: keyword.column, nameStart: nameToken.start,
+        };
+        this.advance();
+
+        if (this.checkKeyword('external')) {
+            timeline.external = true;
+            this.advance();
+        } else if (this.check('openBrace')) {
+            this.advance();
+            timeline.bodyStart = this.current().start;
+            let depth = 1;
+            while (!this.check('end') && depth > 0) {
+                if (this.check('openBrace')) {
+                    depth += 1;
+                } else if (this.check('closeBrace')) {
+                    depth -= 1;
+                    if (depth === 0) {
+                        break;
+                    }
+                }
+                this.advance();
+            }
+            timeline.bodyEnd = this.current().start;
+            if (this.check('closeBrace')) {
+                this.advance();
+            }
+        }
+
+        const duplicate = this.result.timelines.find((existing) => foldName(existing.name) === foldName(timeline.name));
+        if (duplicate) {
+            this.error(3016, `timeline '${timeline.name}' is declared twice`,
+                { line: timeline.line, column: timeline.column, start: timeline.nameStart, end: timeline.nameStart + timeline.name.length });
+            return;
+        }
+        this.result.timelines.push(timeline);
     }
 
     private parseResourcesBlock(): void {

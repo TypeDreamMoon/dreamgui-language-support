@@ -42,6 +42,18 @@ export interface FileSummary {
     resourceUses: NamedSymbol[];
     /** Node tags that are asset paths: this file nests that class. */
     nestedClasses: NamedSymbol[];
+    /**
+     * Every `use "…"` spelling, as written.
+     *
+     * Here because an import is TRANSITIVE and only this layer can follow one: ParseUseDeclaration
+     * (DreamUISourceFile.cpp) merges the imported file's own ImportedStyles and ImportedResources
+     * into the importer as well as its local ones, so a style library that layers -- A uses B, B
+     * uses C -- puts C's styles in A's scope. Without this field the judge could only see one hop,
+     * and every second-hand style and resource came back as a false DUI3004 / DUI4007 on a file the
+     * compiler builds happily. Spellings rather than resolved paths, because resolution is
+     * WorkspaceIndex.resolveImportSpelling's answer and it can change as files appear.
+     */
+    imports: string[];
 }
 
 /** '/Game/UI/WBP_X.WBP_X_C' and '/Game/UI/WBP_X' name the same package. */
@@ -56,6 +68,7 @@ export function summarizeFile(file: string, text: string): FileSummary {
     const structure = buildStructure(text);
     const summary: FileSummary = {
         file, nodes: [], styles: [], styleUses: [], resources: [], resourceUses: [], nestedClasses: [],
+        imports: structure.imports.map((directive) => directive.path),
     };
 
     if (structure.classPath) {

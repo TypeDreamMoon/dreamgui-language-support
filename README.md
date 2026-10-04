@@ -24,6 +24,11 @@ Language support for DreamGUI `.dui` widget hierarchies.
   (DUI2002/2003/2004/2006/2013, 3001/3002/3004/3005/3008/3014/3015, and the rename-clause checks
   as warnings), plus symbol-driven checks. The compiler stays the authority — anything it might
   accept is a warning here at most, and the project's real files sweep clean by test.
+- **`timeline` blocks** are highlighted, outlined and left alone: a track line
+  (`Row/Icon.RenderScale : 0.0 = (1, 1, 1), 0.3 = (1.25, 1.25, 1) ease InOutQuad`) resolves against
+  the widget tree and the engine's reflection, which one file's characters cannot see, so every
+  verdict about one is the compiler's. `timeline X external` names an animation that lives in the
+  asset and is edited in Sequencer.
 - **Explanations**: every diagnostic offers an "解释 DUInnnn" action opening the bundled
   code-table entry — what it means, why it fired, how to fix it.
 - **Quickfixes**: declare the unknown resource (DUI4007), create the unknown style (DUI3004).
@@ -69,6 +74,31 @@ Language support for DreamGUI `.dui` widget hierarchies.
 - **Reveal in VS Code** from the Unreal designer's toolbar or hierarchy context menu jumps here to
   the node's line; a single `.dui` opened on its own is indexed with the rest of its `DUI/` tree,
   so imports resolve without a folder open.
+
+## What the language deliberately does not have
+
+These come up, and every one of them is a decision rather than a gap. The extension will not
+complete them, the compiler refuses them where they parse at all, and none of them is coming
+without somebody deciding what it should mean first.
+
+| Not in the language | Why, and what to write instead |
+|---|---|
+| `if` / `#ifdef`, templates, mixins | `.dui` is declarative: a file describes one hierarchy, and every line in it is in that hierarchy. Control flow would make "what does this file build" a question you cannot answer by reading it. Variation belongs in the class — bind visibility (`bWidgetActive <- IsAdvanced()`), or compile two classes. |
+| Variables, theme variables | `resources { … }` is the named-constant mechanism and it already resolves through `use`, so a palette lives in one file that every screen imports. What a variable would add is *reassignment*, which is the declarative rule again. |
+| Media queries, pseudo-states (`:hover`) | A state has to be driven by something, and in this framework that something is a behaviour (`UUISelectable` and friends already own hover, press, disabled and their transitions). A second state machine in the language would have to agree with it frame by frame. |
+| `A \| B` for flag enums | The grammar has no `\|` and adding an operator is a language change. A combination is written as **the number its flags add up to** — the compiler validates it against the enum (`IsValidEnumValueOrBitfield`), and the write-back prints it back, so the round trip is whole. |
+| `a ? b : c`, `Items[0]` | The expression language is arithmetic, comparison and calls, because every operator added to it has to be lowered into a Blueprint graph, taught to this extension's scanner, and documented in three places. A conditional is a function on the class; an index is a function that takes one. |
+| Array and dictionary literals | Same reason, and there is nowhere for the value to land: no property the language addresses takes one from text. |
+| `\uXXXX` in strings | `.dui` files are UTF-8. Write the character. |
+| `for` loops | Parsed, and refused with **DUI5007**. The keyword is reserved for compile-time expansion and its semantics were never decided (a range? a literal list? the declared source is a no-argument UFUNCTION, which a compile cannot call). Use `each` for a run-time list, or write the copies out. |
+
+Two things that look like gaps and are not:
+
+- **Imported `resources` do become class variables.** `use "Palette.dui"` gives this class a
+  variable per entry, so a graph and the Class Defaults panel can see what `@Accent` is. A local
+  entry of the same name shadows the imported one, exactly as `@Accent` resolves.
+- **Imported `style` blocks do not.** A style is a bag of values applied by name; it has no
+  identity to own.
 
 ## Where the smarts come from
 
