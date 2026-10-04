@@ -162,3 +162,12 @@ npm run package     # produces the .vsix
 
 Point `DREAMUI_CORPUS_DIR` at a project's `DUI/` directory to sweep every real file through the
 scanner and structure layer as part of `npm test`.
+
+## Release
+
+Bump `version` in `package.json`, add its `## x.y.z` section to `CHANGELOG.md`, push to `master`.
+The `release` workflow runs the tests, tags `vx.y.z`, and publishes a GitHub release carrying the
+`.vsix` with that section as its notes. With a `VSCE_PAT` repository secret (an Azure DevOps token
+with Marketplace > Manage scope for the `typedreammoon` publisher) it publishes the same `.vsix` to
+the Marketplace; without one that step is skipped. After adding the secret, run the workflow by hand
+(Actions > release > Run workflow) to publish a version that is already on GitHub.

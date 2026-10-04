@@ -13,3 +13,4 @@ install-vscode-extension.ps1
 test-electron/**
 out/test-electron/**
 .vscode-test/**
+.github/**

@@ -109,3 +109,11 @@ npm run package     # 产出 .vsix
 
 设 `DREAMUI_CORPUS_DIR` 指向工程的 `DUI/` 目录,`npm test` 会把每个真实文件扫一遍,
 词法与结构层必须零报。
+
+## 发布
+
+改 `package.json` 的 `version`,在 `CHANGELOG.md` 加上对应的 `## x.y.z` 一节,推到 `master`。
+`release` 工作流会跑测试、打 `vx.y.z` tag,并发布带 `.vsix` 的 GitHub Release,说明取自那一节。
+仓库里有 `VSCE_PAT` 密钥(`typedreammoon` 发布者的 Azure DevOps 令牌,Marketplace > Manage 权限)时,
+同一个 `.vsix` 也会发布到 Marketplace;没有则跳过这一步。加上密钥后,手动运行一次工作流
+(Actions > release > Run workflow)即可把已在 GitHub 发布的版本补发到 Marketplace。
