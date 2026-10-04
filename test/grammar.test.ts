@@ -131,6 +131,25 @@ test('comments, including a block comment spanning lines', async () => {
     assertScope(lines, 2, 'still inside', 'comment.block.dui');
 });
 
+test('an indented comment, or one after a `{` or `;`, is not a node whose type is a path `//`', async () => {
+    const lines = await tokenize([
+        '    // The scroll track and its thumb.',
+        '        /// Three slashes, too.',
+        '    Overlay { // The note',
+        '    Spacing = 4; // The note',
+        '    /Game/UI/WBP_Row Row { }',
+    ]);
+    assertScope(lines, 0, '// The', 'comment.line.double-slash.dui');
+    assertScope(lines, 0, 'The', 'comment.line.double-slash.dui');
+    assertNoScope(lines, 0, 'The', 'entity.name.section.id.dui');
+    assertScope(lines, 1, 'Three', 'comment.line.double-slash.dui');
+    assertScope(lines, 2, 'Overlay', 'entity.name.tag.dui');
+    assertScope(lines, 2, 'The', 'comment.line.double-slash.dui');
+    assertScope(lines, 3, 'The', 'comment.line.double-slash.dui');
+    assertScope(lines, 4, '/Game/UI/WBP_Row', 'entity.name.tag.dui');
+    assertScope(lines, 4, 'Row {', 'entity.name.section.id.dui');
+});
+
 test('values: string, escape, number, colour, resource reference, asset path', async () => {
     const lines = await tokenize([
         '    Text = "a\\nb"',

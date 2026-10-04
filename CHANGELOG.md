@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 — 2026-10-04
+
+- **Indented comments are comments again.** A node header may name its type by path, and the path
+  rule took `//` for one: on an indented line it starts at the indent, left of the comment, so
+  `    // The scroll track and its thumb.` read as a node of type `//` called `The`. The same happened
+  to a comment after a `{` or a `;`. A path no longer starts with `//` or `/*`.
+
 ## 0.8.0 — 2026-10-04
 
 The component syntax: what DreamGUI's `.dui` gained after 2.1.0 — `use … as`, `props`, `events`,
