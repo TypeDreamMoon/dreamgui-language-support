@@ -5,9 +5,21 @@
  * lives here, not just the codes this extension raises itself: once compiler diagnostics start
  * arriving (the diagnostics mailbox, batch two), their codes explain themselves for free.
  *
- * When the docs site gets its DUInnnn pages, diagnostics gain a codeDescription URL and this
- * table becomes the offline fallback.
+ * The docs site has a page per thousand codes and an anchor per code (codeDocUrl): a diagnostic's
+ * code links there, and this table is the offline fallback.
  */
+
+export const DOCS_SITE = 'https://gui.toolchain.64hz.cn';
+
+/**
+ * The docs site's entry for DUInnnn: `/docs/diagnostics/dui3xxx/#dui3001`, Chinese when the editor
+ * runs in Chinese (the site's default locale), English under `/en` otherwise. The trailing slash is
+ * the site's own spelling; without it a static host redirects first.
+ */
+export function codeDocUrl(code: number, locale: string): string {
+    const prefix = locale.toLowerCase().startsWith('zh') ? '' : '/en';
+    return `${DOCS_SITE}${prefix}/docs/diagnostics/dui${Math.floor(code / 1000)}xxx/#dui${code}`;
+}
 
 export interface CodeExplanation {
     /** 一句话:这个码在说什么。 */
@@ -531,5 +543,6 @@ export function explainCode(code: number): string | undefined {
         return undefined;
     }
     return `# DUI${code} · ${entry.title}\n\n${entry.explain}\n\n**怎么修**:${entry.fix}\n\n---\n\n`
-        + `*码表与编译器 \`DreamUIDiagnostics.h\` 同源;数字是稳定部分,文案会持续改进。*\n`;
+        + `*码表与编译器 \`DreamUIDiagnostics.h\` 同源;数字是稳定部分,文案会持续改进。*\n\n`
+        + `[文档站上的 DUI${code}](${codeDocUrl(code, 'zh')})\n`;
 }

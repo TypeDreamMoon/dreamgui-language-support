@@ -5,7 +5,9 @@
  */
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { CODE_EXPLANATIONS, explainCode } from '../src/core/codes';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { CODE_EXPLANATIONS, codeDocUrl, explainCode } from '../src/core/codes';
 import { LOCALLY_RAISED } from '../src/core/mailbox';
 
 /** Every number in [first, last]. */
@@ -123,4 +125,32 @@ test('explainCode renders markdown with the code in its heading', () => {
     assert.match(markdown, /^# DUI3001/);
     assert.match(markdown, /怎么修/);
     assert.equal(explainCode(9999), undefined);
+});
+
+test("a code links to its entry on the docs site, in the editor's language", () => {
+    assert.equal(codeDocUrl(3001, 'zh-cn'), 'https://gui.toolchain.64hz.cn/docs/diagnostics/dui3xxx/#dui3001');
+    assert.equal(codeDocUrl(1007, 'zh-TW'), 'https://gui.toolchain.64hz.cn/docs/diagnostics/dui1xxx/#dui1007');
+    assert.equal(codeDocUrl(3001, 'en'), 'https://gui.toolchain.64hz.cn/en/docs/diagnostics/dui3xxx/#dui3001');
+    assert.equal(codeDocUrl(7005, 'ja'), 'https://gui.toolchain.64hz.cn/en/docs/diagnostics/dui7xxx/#dui7005');
+    assert.match(explainCode(3001)!, /\(https:\/\/gui\.toolchain\.64hz\.cn\/docs\/diagnostics\/dui3xxx\/#dui3001\)/);
+});
+
+/**
+ * Point DREAMUI_SITE_OUT at the docs site's static export (its out/ directory) to hold every link to a
+ * page and an anchor that exist, in both locales; without the variable this checks nothing.
+ */
+const siteOut = process.env.DREAMUI_SITE_OUT;
+test('every code the compiler can send has its anchor on the docs site', { skip: siteOut ? false : 'DREAMUI_SITE_OUT not set' }, () => {
+    const pages = new Map<string, string>();
+    for (const code of COMPILER_TABLE) {
+        for (const locale of ['zh', 'en']) {
+            const url = new URL(codeDocUrl(code, locale));
+            const file = path.join(siteOut!, ...url.pathname.split('/').filter(Boolean), 'index.html');
+            if (!pages.has(file)) {
+                assert.ok(fs.existsSync(file), `${url.pathname} is not in the export`);
+                pages.set(file, fs.readFileSync(file, 'utf8'));
+            }
+            assert.ok(pages.get(file)!.includes(`id="${url.hash.slice(1)}"`), `${url.pathname}${url.hash} has no anchor`);
+        }
+    }
 });

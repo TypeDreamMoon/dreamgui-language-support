@@ -16,6 +16,7 @@ import { buildModel } from './docmodel';
 import { planDeclareResource, planCreateStyle, EditPlan } from './core/quickfixes';
 import { filesDeclaring, planUseInsertion, planUseSpelling, componentFilesNamed } from './core/useFix';
 import { WorkspaceIndexHost } from './workspace';
+import { codeText } from './codeLinks';
 
 export function registerQuickfixes(context: vscode.ExtensionContext, host?: WorkspaceIndexHost): void {
     context.subscriptions.push(vscode.languages.registerCodeActionsProvider({ language: 'dui' }, {
@@ -91,7 +92,8 @@ export function registerQuickfixes(context: vscode.ExtensionContext, host?: Work
             };
 
             for (const diagnostic of actionContext.diagnostics) {
-                if (diagnostic.code === 'DUI3003') {
+                const code = codeText(diagnostic.code);
+                if (code === 'DUI3003') {
                     // The range covers the type as written (the compiler's may be a bare position: then the word
                     // there). Only a plain name can become an alias; componentFilesNamed refuses anything else.
                     const written = document.getText(diagnostic.range).trim();
@@ -101,7 +103,7 @@ export function registerQuickfixes(context: vscode.ExtensionContext, host?: Work
                     if (importer) {
                         actions.push(importer);
                     }
-                } else if (diagnostic.code === 'DUI4007') {
+                } else if (code === 'DUI4007') {
                     // The range covers '@Name'; the name is the text minus its '@'.
                     const name = document.getText(diagnostic.range).replace(/^@/, '');
                     if (!name) {
@@ -114,7 +116,7 @@ export function registerQuickfixes(context: vscode.ExtensionContext, host?: Work
                     actions.push(toAction(`Declare resource '${name}'`,
                         planDeclareResource(model.structure, name, document.getText().length),
                         diagnostic, importer === undefined));
-                } else if (diagnostic.code === 'DUI3004') {
+                } else if (code === 'DUI3004') {
                     // The range covers the style name, at a wearing site or a base clause alike.
                     const name = document.getText(diagnostic.range);
                     if (!/^[^\s{}():=]+$/.test(name)) {

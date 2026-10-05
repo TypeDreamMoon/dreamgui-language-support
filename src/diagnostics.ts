@@ -12,6 +12,7 @@ import { SymbolStore } from './symbols';
 import { buildModel } from './docmodel';
 import { CoreDiagnostic, judgeDocument } from './core/diagnose';
 import { formatCode } from './core/scanner';
+import { linkedCode } from './codeLinks';
 import { WorkspaceIndexHost } from './workspace';
 
 export function registerDiagnostics(context: vscode.ExtensionContext, store: SymbolStore,
@@ -104,7 +105,7 @@ function toVscode(document: vscode.TextDocument, source: CoreDiagnostic): vscode
     const diagnostic = new vscode.Diagnostic(range,
         code === undefined ? source.message : `${code}: ${source.message}`,
         SEVERITIES[source.severity]);
-    diagnostic.code = code;
+    diagnostic.code = source.code === undefined ? undefined : linkedCode(source.code);
     diagnostic.source = 'dui';
     return diagnostic;
 }

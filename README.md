@@ -2,7 +2,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Language support for DreamGUI `.dui` widget hierarchies.
+Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the language are documented at
+[gui.toolchain.64hz.cn](https://gui.toolchain.64hz.cn/en/docs/).
 
 ## What it does
 
@@ -64,7 +65,9 @@ Language support for DreamGUI `.dui` widget hierarchies.
   the widget tree and the engine's reflection, which one file's characters cannot see, so every
   verdict about one is the compiler's. `timeline X external` names an animation that lives in the
   asset and is edited in Sequencer.
-- **Explanations**: every diagnostic offers an "解释 DUInnnn" action opening the bundled
+- **Explanations**: a diagnostic's code, in Problems and in the hover, is a link to its entry on the docs
+  site ([DUI1xxx–7xxx](https://gui.toolchain.64hz.cn/en/docs/diagnostics/), in Chinese when VS Code runs in
+  Chinese). Offline, every diagnostic offers an "解释 DUInnnn" action opening the bundled
   code-table entry — what it means, why it fired, how to fix it. The table covers the compiler's
   whole table, the component syntax's codes included (`use … as`, `props`, `events`, `if`, slots,
   `for`, `emit` and the two new write-back refusals), and is held to it by test.

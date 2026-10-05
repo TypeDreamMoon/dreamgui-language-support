@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1 — 2026-10-05
+
+DreamGUI 1.0.0 and its docs site, [gui.toolchain.64hz.cn](https://gui.toolchain.64hz.cn).
+
+- **A diagnostic's code opens its page on the docs site.** `DUI3001` in Problems and in the hover is a link to
+  `/docs/diagnostics/dui3xxx/#dui3001` -- the Chinese page when VS Code runs in Chinese, the English one under
+  `/en` otherwise -- for the extension's own diagnostics and the compiler's alike. "解释 DUInnnn" stays: the bundled
+  table is the offline copy, and its preview links the same page. The quick fixes and the explain action read the
+  code through one helper now, since a linked code is no longer a plain string.
+- **`homepage`** in the manifest, and both READMEs, point at the site.
+- Tests: the URL for each locale, and -- with `DREAMUI_SITE_OUT` pointing at the site's static export -- every code
+  the compiler can send against the pages and anchors the site actually has.
+
 ## 0.9.0 — 2026-10-04
 
 `rows`: the plugin's table of instances (DreamGUI main `86c86160`).

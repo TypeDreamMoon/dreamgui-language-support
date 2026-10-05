@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseMailbox, mailboxDiagnosticsToShow, Mailbox } from './core/mailbox';
 import { formatCode } from './core/scanner';
+import { linkedCode } from './codeLinks';
 
 const MAILBOX_FILE = '.dui-diagnostics.json';
 
@@ -114,7 +115,7 @@ export class MailboxWatcher implements vscode.Disposable {
                     source.severity === 'error'
                         ? vscode.DiagnosticSeverity.Error
                         : vscode.DiagnosticSeverity.Warning);
-                diagnostic.code = formatCode(source.code);
+                diagnostic.code = linkedCode(source.code);
                 diagnostic.source = 'dui-compiler';
                 return diagnostic;
             });

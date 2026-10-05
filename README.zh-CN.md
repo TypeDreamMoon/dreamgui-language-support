@@ -2,7 +2,8 @@
 
 [English](README.md) | 简体中文
 
-DreamGUI `.dui` 界面层级的语言支持。
+DreamGUI `.dui` 界面层级的语言支持。DreamGUI 和这门语言的文档在
+[gui.toolchain.64hz.cn](https://gui.toolchain.64hz.cn/docs/)。
 
 ## 功能
 
@@ -36,7 +37,8 @@ DreamGUI `.dui` 界面层级的语言支持。
   大纲含 `if` / `else` 分支、按类型显示的匿名节点、插槽声明与填充、循环、`props` 与 `events`;
   token 级折叠与逐级扩选。
 - **诊断用编译器的码与原文**:词法码 DUI1001–1006、单文件可判的结构码(含 DUI2013 嵌套上限),
-  severity 与编译器一致;编译器仍是权威 —— 它可能接受的,这里至多是警告。每条码可点开中文解释;
+  severity 与编译器一致;编译器仍是权威 —— 它可能接受的,这里至多是警告。Problems 和悬停里的码是链接,
+  点开就是[文档站](https://gui.toolchain.64hz.cn/docs/diagnostics/)上它的那一条;离线时每条码也可点开中文解释;
   码表覆盖编译器的整张表,组件语法带来的码(`use … as`、`props`、`events`、`if`、槽、`for`、`emit`
   与两条新的写回拒绝)都在内,由测试守住。
 - **workspace 导航**:Ctrl+T 搜全部 id/样式/资源;F12 按在嵌套 `/Game/X` tag 上落到声明它的文件,

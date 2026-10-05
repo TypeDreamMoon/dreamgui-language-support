@@ -5,6 +5,7 @@
  */
 import * as vscode from 'vscode';
 import { explainCode } from './core/codes';
+import { codeText } from './codeLinks';
 
 const SCHEME = 'dreamui-code';
 
@@ -26,7 +27,7 @@ export function registerExplain(context: vscode.ExtensionContext): void {
             const actions: vscode.CodeAction[] = [];
             const seen = new Set<number>();
             for (const diagnostic of actionContext.diagnostics) {
-                const match = /^DUI(\d{4})$/.exec(String(diagnostic.code ?? ''));
+                const match = /^DUI(\d{4})$/.exec(codeText(diagnostic.code));
                 if (!match) {
                     continue;
                 }
