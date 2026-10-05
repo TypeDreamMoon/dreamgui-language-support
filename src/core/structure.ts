@@ -201,6 +201,28 @@ export interface EventDecl {
 }
 
 /**
+ * One `viewmodels { … }` entry: `PlayerVM Player`, `SettingsVM Settings = new`, `InventoryVM Stash = global "Stash"`.
+ *
+ * line / column are the NAME's (FDreamUIViewModelDecl::Location); the type's are kept beside them, for a class that does
+ * not resolve. Which class the type names is the compiler's to say (DUI6015); this layer records the spelling.
+ */
+export interface ViewModelDecl {
+    /** As written: a reflected class name, a `use … as` name, or a path. */
+    type: string;
+    typeStart: number;
+    typeLine: number;
+    typeColumn: number;
+    name: string;
+    line: number;
+    column: number;
+    nameStart: number;
+    /** What follows the '=': nothing (the host gives it), `new`, `global`, `parent`. */
+    source: 'host' | 'new' | 'global' | 'parent';
+    /** `global "Stash"`, `parent "Party"`: the quoted name. */
+    sourceName?: string;
+}
+
+/**
  * `timeline Pulse { … }` or `timeline Celebrate external`.
  *
  * Recorded, never judged: the block's contents resolve against the TREE (a node path, an Interp
@@ -282,6 +304,13 @@ export interface PropertyStmt {
     end: number;
     op: 'equals' | 'arrow' | 'eventArrow' | 'twoWayArrow';
     /**
+     * A route's operator when it is not `->`: `+=` (append) or a `=` that reads as a route -- a dotted name or `emit`
+     * after it (assign). Such a statement's op is 'eventArrow', as every route's is. A single word after `=`
+     * (`OnInit = HandleInit`) is a value here, as it is to the compiler's parser; its builder makes it a route once it
+     * sees a delegate.
+     */
+    routeOperator?: 'append' | 'assign';
+    /**
      * True when the statement was led by '@slot', sits inside an `@slot { … }` block (one statement per assignment
      * there), or is the `@fill` shorthand.
      */
@@ -326,6 +355,11 @@ export interface BindingRef {
      * class. The arguments' calls and variables are separate BindingRefs, as an expression's are.
      */
     isEmit?: boolean;
+    /**
+     * `Event -> Settings.Apply` / `Event += Settings.SetVolume(Value)`: `name` is a member path whose last segment is a
+     * function of the object the rest reaches -- not a function of this class. Its arguments are separate BindingRefs.
+     */
+    isMemberRoute?: boolean;
     /**
      * A name in an `if` / `else if` condition. The compiler binds it as `Shown <- condition` on every widget of the
      * branch, so it is a binding like any other -- of `Shown`, which no line spells.
@@ -384,7 +418,7 @@ export interface RowsTable {
 
 export interface Scope {
     kind: 'node' | 'namedSlot' | 'component' | 'style' | 'resources' | 'loop' | 'branch' | 'props' | 'events' | 'slotLines'
-        | 'rows';
+        | 'rows' | 'viewmodels';
     /** Node type / component name / style name / loop keyword / 'slot' / 'if' | 'else if' | 'else' / '@slot'. */
     name: string;
     /** Node id, when the scope is a node (the made one for an unnamed node); slot name; loop variable. */
@@ -409,6 +443,8 @@ export interface StructureResult {
     props: PropDecl[];
     /** `events { … }` entries, in declaration order. */
     events: EventDecl[];
+    /** `viewmodels { … }` entries, in declaration order. */
+    viewModels?: ViewModelDecl[];
     /** `rows` tables' headers, in source order. */
     rowsTables?: RowsTable[];
     scopes: Scope[];
@@ -494,7 +530,7 @@ class Parser {
 
     readonly result: StructureResult = {
         roots: [], styles: [], timelines: [], resources: [], resourceRefs: [], bindings: [], imports: [], props: [],
-        events: [], rowsTables: [], scopes: [], diagnostics: [], namespaceRefs: [],
+        events: [], viewModels: [], rowsTables: [], scopes: [], diagnostics: [], namespaceRefs: [],
     };
 
     constructor(private readonly tokens: Token[], private readonly text: string) {}
@@ -661,6 +697,9 @@ class Parser {
                 this.parsePropsBlock();
             } else if (this.checkKeyword('events') && this.peek(1).kind === 'openBrace') {
                 this.parseEventsBlock();
+            } else if (this.checkKeyword('viewmodels') && this.peek(1).kind === 'openBrace') {
+                // With its brace only, as `props`.
+                this.parseViewModelsBlock();
             } else if (this.checkKeyword('if') || this.checkKeyword('else')) {
                 // No lookahead here, exactly as the compiler: a condition chooses between children, and the top of a
                 // file has no parent to give them to.
@@ -1276,6 +1315,101 @@ class Parser {
      * the '@' of a resource type). The type is taken as written and never checked: whether `Image` is a tag needs
      * reflection, which is the builder's half.
      */
+    /** `viewmodels { PlayerVM Player … }` -- the cursor on `viewmodels`, a '{' after it. ParseViewModelsDeclaration, mirrored. */
+    private parseViewModelsBlock(): void {
+        this.advance(); // 'viewmodels'
+        const open = this.current();
+        this.advance(); // '{'
+        const bodyStart = this.current().start;
+        for (;;) {
+            this.skipSeparators();
+            if (this.check('closeBrace')) {
+                this.result.scopes.push({ kind: 'viewmodels', name: 'viewmodels', bodyStart, bodyEnd: this.current().start });
+                this.advance();
+                return;
+            }
+            if (this.atEnd()) {
+                this.error(2002, "this 'viewmodels' block never reaches its '}'", open);
+                this.result.scopes.push({ kind: 'viewmodels', name: 'viewmodels', bodyStart, bodyEnd: this.current().start });
+                return;
+            }
+            const before = this.index;
+            this.parseViewModelLine();
+            if (this.index === before) {
+                this.advance();
+            }
+        }
+    }
+
+    /** `Type Name`, then optionally `= new`, `= global ["Name"]`, `= parent ["Name"]`. ParseViewModelLine, mirrored. */
+    private parseViewModelLine(): void {
+        if (!this.check('identifier') && !this.check('assetPath')) {
+            this.error(2021, `a 'viewmodels' line is written 'Type Name', as in 'PlayerVM Player', found '${this.describeCurrent()}'`,
+                this.current());
+            this.recover();
+            return;
+        }
+        const type = this.current();
+        this.advance();
+        if (!this.check('identifier')) {
+            this.error(2021, `expected the view model's name after '${type.text}', as in '${type.text} Player', found '${this.describeCurrent()}'`,
+                this.current());
+            this.recover();
+            return;
+        }
+        const name = this.current();
+        this.advance();
+
+        const decl: ViewModelDecl = {
+            type: type.text, typeStart: type.start, typeLine: type.line, typeColumn: type.column,
+            name: name.text, line: name.line, column: name.column, nameStart: name.start, source: 'host',
+        };
+        if (this.check('equals')) {
+            this.advance();
+            if (this.checkKeyword('new')) {
+                decl.source = 'new';
+                this.advance();
+            } else if (this.checkKeyword('global') || this.checkKeyword('parent')) {
+                const keyword = this.current();
+                decl.source = keyword.text === 'global' ? 'global' : 'parent';
+                this.advance();
+                if (this.check('string')) {
+                    const quoted = this.current();
+                    if (quoted.text.trim().length === 0) {
+                        this.error(2021, `'${keyword.text} ""' names nothing: write '${keyword.text}' alone to take the view model by its class`, quoted);
+                        this.recover();
+                        return;
+                    }
+                    if (quoted.text.length >= NAME_SIZE) {
+                        this.error(2021, `a name here holds at most ${NAME_SIZE - 1} characters, and this one is ${quoted.text.length}`, quoted);
+                        this.recover();
+                        return;
+                    }
+                    decl.sourceName = quoted.text;
+                    this.advance();
+                }
+            } else {
+                this.error(2021, `'${name.text} =' is followed by where the view model comes from -- 'new', 'global', 'global "Name"', 'parent' or 'parent "Name"' -- or the '=' is left out for one the host gives; found '${this.describeCurrent()}'`,
+                    this.current());
+                this.recover();
+                return;
+            }
+        }
+        if (!this.atStatementEnd()) {
+            this.error(2021, `a 'viewmodels' line declares one view model, and '${this.describeCurrent()}' cannot follow '${name.text}'`,
+                this.current());
+            this.recover();
+            return;
+        }
+        // FString's comparison, case insensitive; the first one kept, the second reported at its name.
+        const first = this.result.viewModels!.find((existing) => foldName(existing.name) === foldName(name.text));
+        if (first) {
+            this.error(3024, `view model '${name.text}' is already declared on line ${first.line}`, name);
+            return;
+        }
+        this.result.viewModels!.push(decl);
+    }
+
     private parseNode(): StructNode | undefined {
         const resourceType = this.check('at') && this.peek(1).kind === 'identifier';
         if (!resourceType && !this.check('identifier') && !this.check('assetPath')) {
@@ -1544,11 +1678,12 @@ class Parser {
             this.recover(); // DUI2007, the compiler's to word
             return;
         }
-        if ((this.checkKeyword('props') || this.checkKeyword('events')) && this.peek(1).kind === 'openBrace') {
+        if ((this.checkKeyword('props') || this.checkKeyword('events') || this.checkKeyword('viewmodels'))
+            && this.peek(1).kind === 'openBrace') {
             // What the CLASS declares, so the top of the file, like `class`. Read as a block rather than as the
             // unnamed node of type `props` it would otherwise parse as.
             const keyword = this.current();
-            this.error(keyword.text === 'props' ? 2016 : 2017,
+            this.error(keyword.text === 'props' ? 2016 : keyword.text === 'events' ? 2017 : 2021,
                 `'${keyword.text}' declares what this file's class has, so it belongs at the top of the file, not inside a node`,
                 keyword);
             this.advance();
@@ -1847,7 +1982,7 @@ class Parser {
             return after !== 'identifier' && after !== 'openBrace' && after !== 'colon';
         }
         return next === 'equals' || next === 'arrow' || next === 'eventArrow'
-            || next === 'twoWayArrow';
+            || next === 'twoWayArrow' || next === 'plusEquals';
     }
 
     /**
@@ -1864,7 +1999,8 @@ class Parser {
             ahead += 2;
         }
         const after = this.peek(ahead).kind;
-        return after === 'equals' || after === 'arrow' || after === 'eventArrow' || after === 'twoWayArrow';
+        return after === 'equals' || after === 'arrow' || after === 'eventArrow' || after === 'twoWayArrow'
+            || after === 'plusEquals';
     }
 
     /**
@@ -1901,6 +2037,16 @@ class Parser {
 
         if (this.check('equals')) {
             this.advance();
+            // `OnPicked = Settings.Apply()`, `OnPicked = emit Picked(1)`: the one listener of a single-cast delegate,
+            // told from a value by its shape (StartsAssignedRoute). One word stays a value -- it reads like an enum.
+            if (this.startsAssignedRoute()) {
+                if (!this.parseRoute(first.start, pathEnd)) {
+                    return undefined;
+                }
+                const routed = make('eventArrow');
+                routed.routeOperator = 'assign';
+                return routed;
+            }
             const valueStart = this.current().start;
             if (!this.parseValue()) {
                 this.recover(); // MissingPropertyValue, DUI2005
@@ -1911,44 +2057,39 @@ class Parser {
             stmt.valueEnd = Math.max(valueStart, this.previousEnd());
             return stmt;
         }
-        if (this.check('eventArrow')) {
-            // `OnClicked -> Confirm` -- a bare handler name -- or `OnClicked -> emit Picked(Index)`, the one place
-            // arguments ARE written after `->`. `emit` is the keyword only with an event name after it.
+        if (this.check('eventArrow') || this.check('plusEquals')) {
+            // `OnClicked -> Confirm`, `OnClicked += Confirm` -- one listener among others, said out loud.
+            const append = this.check('plusEquals');
             this.advance();
-            if (this.checkKeyword('emit') && this.peek(1).kind === 'identifier') {
-                this.advance(); // 'emit'
-                if (!this.parseEmitRoute(first.start, pathEnd)) {
-                    return undefined;
-                }
-                return make('eventArrow');
-            }
-            if (!this.check('identifier')) {
-                this.recover();
+            if (!this.parseRoute(first.start, pathEnd)) {
                 return undefined;
             }
-            const fn = this.current();
-            this.result.bindings.push({
-                isEvent: true, pathStart: first.start, pathEnd, name: fn.text, nameStart: fn.start,
-            });
-            this.advance();
-            return make('eventArrow');
+            const routed = make('eventArrow');
+            if (append) {
+                routed.routeOperator = 'append';
+            }
+            return routed;
         }
         if (this.check('twoWayArrow')) {
             // `Value <-> Volume` -- a bare VARIABLE name: the two sides mirror each other, and a
-            // call or an expression has no left-hand side to write back into.
+            // call or an expression has no left-hand side to write back into. Or a member path to one on an object the
+            // class holds, `Value <-> Settings.Volume`.
             this.advance();
             if (!this.check('identifier')) {
                 this.recover(); // DUI2011
                 return undefined;
             }
             const variable = this.current();
+            const path = this.parseMemberPath();
+            if (path === undefined) {
+                return undefined;
+            }
             this.result.bindings.push({
                 isEvent: false, pathStart: first.start, pathEnd,
-                name: variable.text, nameStart: variable.start, isVariable: true,
+                name: path, nameStart: variable.start, isVariable: true,
             });
-            this.advance();
             const stmt = make('twoWayArrow');
-            this.twoWayVariables.set(stmt, variable.text);
+            this.twoWayVariables.set(stmt, path);
             return stmt;
         }
         if (this.check('arrow')) {
@@ -1969,17 +2110,77 @@ class Parser {
         return undefined;
     }
 
-    /** The rest of `Event -> emit Name(args)`, the cursor on Name. */
-    private parseEmitRoute(pathStart: number, pathEnd: number): boolean {
-        const event = this.current();
-        this.result.bindings.push({
-            isEvent: true, isEmit: true, pathStart, pathEnd, name: event.text, nameStart: event.start,
-        });
-        this.advance();
-        if (!this.check('openParen')) {
+    /**
+     * StartsAssignedRoute, mirrored: just past a property's `=`, a dotted name or `emit Name` (before its '(' or the
+     * statement's end) is a route, not a value -- neither was ever a value.
+     */
+    private startsAssignedRoute(): boolean {
+        if (!this.check('identifier')) {
+            return false;
+        }
+        if (this.peek(1).kind === 'dot' && this.peek(2).kind === 'identifier') {
             return true;
         }
+        if (!this.checkKeyword('emit') || this.peek(1).kind !== 'identifier') {
+            return false;
+        }
+        const after = this.peek(2).kind;
+        return after === 'openParen' || after === 'separator' || after === 'closeBrace' || after === 'end';
+    }
+
+    /**
+     * ParseRoute, mirrored: what follows `->`, `+=` or a route's `=` -- `Handler`, `emit Name(args)`, or
+     * `Path.Func` / `Path.Func(args)`, the same three after every operator.
+     */
+    private parseRoute(pathStart: number, pathEnd: number): boolean {
+        if (this.checkKeyword('emit') && this.peek(1).kind === 'identifier') {
+            this.advance(); // 'emit'
+            return this.parseEmitRoute(pathStart, pathEnd);
+        }
+        if (!this.check('identifier')) {
+            this.recover();
+            return false;
+        }
+        const fn = this.current();
+        if (this.peek(1).kind === 'dot') {
+            const path = this.parseMemberPath();
+            if (path === undefined) {
+                return false;
+            }
+            this.result.bindings.push({
+                isEvent: true, isMemberRoute: true, pathStart, pathEnd, name: path, nameStart: fn.start,
+            });
+            if (!this.check('openParen')) {
+                return true;
+            }
+            this.advance();
+            return this.parseArgumentList(pathStart, pathEnd);
+        }
+        this.result.bindings.push({
+            isEvent: true, pathStart, pathEnd, name: fn.text, nameStart: fn.start,
+        });
         this.advance();
+        return true;
+    }
+
+    /** ParseMemberPath, mirrored: the words of `Settings.Volume` joined with their dots, the cursor on the first. */
+    private parseMemberPath(): string | undefined {
+        let path = this.current().text;
+        this.advance();
+        while (this.check('dot')) {
+            this.advance();
+            if (!this.check('identifier')) {
+                this.recover(); // "expected a member name after …", DUI2011
+                return undefined;
+            }
+            path += `.${this.current().text}`;
+            this.advance();
+        }
+        return path;
+    }
+
+    /** `a, b)` -- a route's or an emit's arguments, the cursor just past the '('. */
+    private parseArgumentList(pathStart: number, pathEnd: number): boolean {
         if (!this.check('closeParen')) {
             for (;;) {
                 if (!this.parseExpression(1, { pathStart, pathEnd })) {
@@ -1997,6 +2198,20 @@ class Parser {
         }
         this.advance();
         return true;
+    }
+
+    /** The rest of `Event -> emit Name(args)`, the cursor on Name. */
+    private parseEmitRoute(pathStart: number, pathEnd: number): boolean {
+        const event = this.current();
+        this.result.bindings.push({
+            isEvent: true, isEmit: true, pathStart, pathEnd, name: event.text, nameStart: event.start,
+        });
+        this.advance();
+        if (!this.check('openParen')) {
+            return true;
+        }
+        this.advance();
+        return this.parseArgumentList(pathStart, pathEnd);
     }
 
     // ---- binding expressions -------------------------------------------------------------------
@@ -2074,10 +2289,22 @@ class Parser {
                 if (token.text === 'true' || token.text === 'false') {
                     return true;
                 }
+                // Dots first, for both readings, as the compiler does: `Player.Stats.Title` is a member path and
+                // `Player.Format(a)` a call on the object `Player` holds -- one dotted name either way.
+                let full = token.text;
+                while (this.check('dot')) {
+                    this.advance();
+                    if (!this.check('identifier')) {
+                        this.recover();
+                        return false;
+                    }
+                    full += `.${this.current().text}`;
+                    this.advance();
+                }
                 if (this.check('openParen')) {
                     this.result.bindings.push({
                         isEvent: false, pathStart: context.pathStart, pathEnd: context.pathEnd,
-                        name: token.text, nameStart: token.start, ...(context.isCondition ? { isCondition: true } : {}),
+                        name: full, nameStart: token.start, ...(context.isCondition ? { isCondition: true } : {}),
                     });
                     if (this.expressionDepth >= MAX_NESTING_DEPTH) {
                         this.recover();
@@ -2108,18 +2335,8 @@ class Parser {
                     this.advance();
                     return true;
                 }
-                // A bare identifier is a variable on the user widget -- a `props` entry included -- and dots extend
-                // it into a path (`Item.Title` inside a loop body).
-                let full = token.text;
-                while (this.check('dot')) {
-                    this.advance();
-                    if (!this.check('identifier')) {
-                        this.recover();
-                        return false;
-                    }
-                    full += `.${this.current().text}`;
-                    this.advance();
-                }
+                // A bare identifier is a variable on the user widget -- a `props` entry included -- and a dotted one
+                // the member path read above (`Item.Title` inside a loop body, `Player.Name` through a view model).
                 this.result.bindings.push({
                     isEvent: false, pathStart: context.pathStart, pathEnd: context.pathEnd,
                     name: full, nameStart: token.start, isVariable: true,
@@ -2480,9 +2697,14 @@ class Parser {
             return;
         }
         const source = this.current();
-        loop.loopSource = source.text;
+        // `in Inventory.Items`, `in Inventory.Filtered()`: a member path, kept as one dotted string.
+        const sourcePath = this.parseMemberPath();
+        if (sourcePath === undefined) {
+            unfinished();
+            return;
+        }
+        loop.loopSource = sourcePath;
         loop.loopSourceStart = source.start;
-        this.advance();
         // The parentheses DISTINGUISH: `in GetItems()` calls a function, `in Items` reads a variable.
         loop.loopSourceIsFunction = false;
         if (this.check('openParen')) {

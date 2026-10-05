@@ -77,13 +77,15 @@ export function bindingTailOf(line: string): BindingTail | undefined {
         if (character === '{' && firstBrace < 0) {
             firstBrace = index;
         }
-        // The three-character arrow is tested first -- it contains both of the others.
+        // The three-character arrow is tested first -- it contains both of the others. `+=` routes as `->` does: what
+        // follows it is a handler, `emit`, or a member route, and only the event's kind tells the two apart.
         const op: BindingArrow | undefined = line.startsWith('<->', index) ? '<->'
             : line.startsWith('<-', index) ? '<-'
-                : line.startsWith('->', index) ? '->' : undefined;
+                : line.startsWith('->', index) || line.startsWith('+=', index) ? '->' : undefined;
         if (op) {
-            found = { op, tail: line.slice(index + op.length), tailStart: index + op.length };
-            index += op.length - 1;
+            const length = op === '->' && line.startsWith('+=', index) ? 2 : op.length;
+            found = { op, tail: line.slice(index + length), tailStart: index + length };
+            index += length - 1;
         }
     }
     if (found) {

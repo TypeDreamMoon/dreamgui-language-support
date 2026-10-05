@@ -164,6 +164,11 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         explain: '`slot` 有两种用法,由块里写了什么来区分。**声明**(组件自己的文件里):可以带 `default`、样式和 `(was: …)`,块里写组件、属性和 `@slot` 行来布置这个洞,不写 widget——洞里放什么是宿主的事。**填充**(宿主里、组件实例内部):块里只写 widget。两样都写的块既不是声明也不是填充,被拒绝而不是猜。`default` 写了两次,或在填充上写 `default`、样式或改名(这些属于槽的声明处),也是这一条。',
         fix: '声明里不放 widget,填充里只放 widget;`default`、样式与 `(was:)` 写到组件文件里的声明上。',
     },
+    2021: {
+        title: 'viewmodels 里的一行写错了',
+        explain: '`viewmodels { … }` 每行声明一个 ViewModel:`类型 名字`,后面可以跟 `= new`、`= global`、`= global "名字"`、`= parent` 或 `= parent "名字"`,说明对象从哪来;不写 `=` 就是由宿主给。别的写法、`global ""` 这种空名字、一行写两个名字,都在这里报。`viewmodels` 块写在节点里面也是这个码:它声明的是类有什么,属于文件顶层。',
+        fix: '按 `PlayerVM Player`、`SettingsVM Settings = new`、`InventoryVM Stash = global "Stash"` 的样子改写;块挪到文件顶层。',
+    },
     2020: {
         title: 'rows 表格的形状不对',
         explain: '`rows 类型 : 样式 (列, 列) { 值, 值 }` 把同一个组件写成一张表:表头写一次类型、样式和属性名,之后每行一个实例,值按列的顺序落到各个属性上。列表必须是括号里的属性名(可以带点),每列只写一次;每行的值数必须和列数一样多——少一个会按样式或类默认值去猜,多一个会丢掉作者写的东西,两样都是猜,所以这一行不生成 widget。',
@@ -275,6 +280,11 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         title: '一个文件里有不止一个 default 槽',
         explain: '宿主不写槽名、直接嵌套在实例里的内容只有一个去处,两个候选是文件里没有任何东西做出的选择。第一个保留默认身份,按它编译过的宿主仍然一致。',
         fix: '只在一个 `slot … default` 上保留 `default`;其余的槽让宿主用 `slot 名字 { … }` 按名填充。',
+    },
+    3024: {
+        title: '两个 ViewModel 同名',
+        explain: '`viewmodels` 里两行用了同一个名字(不分大小写)。每个名字会成为类的一个变量,两个同名的只能留一个:保留第一个,后面的报这个码。',
+        fix: '给其中一个改名,或删掉重复的那一行。',
     },
     3023: {
         title: 'rows 表格里两行的 key 生成了同一个 id(警告)',
@@ -430,6 +440,21 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         explain: '`for` 在它所在的 widget 里按条目各复制一份模板,所以:不能做根;不能嵌在另一个 `for` 或 `each` 里(内层的条目写入会指向外层副本没有的变量);宿主要能装任意多个子级(滚动框的单一内容、内容控件都不行);体里恰好一个模板 widget。',
         fix: '把 `for` 移进能装多个子级的容器(`VerticalBox` 之类),体收敛成单个 widget,多个就包一层容器。要嵌套,就重复一个自己文件里带 `for` 的组件,经它的 props 把内层列表交给它。',
     },
+    5023: {
+        title: '成员路径的某一段找不到',
+        explain: '`Player.Helth`、`Settings.Apply()` 这类路径,每一段都要是上一段那个对象的类的成员,而且蓝图能碰到:属性要 BlueprintReadOnly / BlueprintReadWrite,函数要 BlueprintCallable / BlueprintPure。消息里会写出卡在哪一段、那一段是什么类。UnrealSharp 的 `[UProperty]` 默认不对蓝图可见,要写上 `PropertyFlags.BlueprintReadOnly` 或 `BlueprintReadWrite`。',
+        fix: '改正拼写;给成员加上蓝图可见的标志;确认 viewmodels 里写的类型就是有这个成员的类。',
+    },
+    5024: {
+        title: '成员路径穿过了一个不是对象的值',
+        explain: '路径只能沿着对象往下走:`Player.Health.Max` 里 `Health` 是一个数字,它没有成员可取。',
+        fix: '路径停在那个值上(`Player.Health`),要算的东西放进 ViewModel 的函数或属性里。',
+    },
+    5025: {
+        title: '路由运算符和事件的种类对不上',
+        explain: '`+=` 是"再加一个监听者",只有多播事件(BlueprintAssignable 的委托、DreamUIEventDelegate)装得下;`=` 是"它唯一的监听者",只给单播委托用。`+=` 写在单播委托上,或 `=` 写在多播事件上(那样会把控件自己和蓝图挂的监听都挤掉),都报这个码,这条路由不生效。`->` 两种都接受。',
+        fix: '多播事件用 `+=` 或 `->`,单播委托用 `=` 或 `->`。',
+    },
     5022: {
         title: '一个节点上有第二个布局容器',
         explain: '一个 widget 只能用一种方式排列子级。容器类型的节点(`VerticalBox Column { … }`)再写 `+ HorizontalBox`,或者节点自己的 `+` 行和样式的 `+` 行各带来一个容器,都是第二个——以前第二个会一声不吭地替换第一个,连同它的值。',
@@ -501,6 +526,46 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         title: 'props 的默认值装不进它的类型',
         explain: '例如 `Integer Count = 1.5`、枚举里没有的值、不存在的资产。',
         fix: '按声明的类型改默认值,或改类型。',
+    },
+    6015: {
+        title: 'viewmodels 的类型找不到',
+        explain: '`viewmodels` 里写的类型要能解析成一个类:反射名(C++ 的 `UPlayerVM` 写 `PlayerVM`)、完整路径(`/Script/MyGame.PlayerVM`、`/Game/UI/BP_PlayerVM`),或者 `use … as` 起的名字。一个都对不上,或者短名字对上了两个类,都报这个码。',
+        fix: '改正类名;重名时写完整路径,或先 `use /Script/MyGame.PlayerVM as PlayerVM`。',
+    },
+    6016: {
+        title: 'viewmodels 的名字已经被占用',
+        explain: '每个 ViewModel 会成为类的一个变量,名字不能和类里已有的东西重:一个 widget、一个 prop、一个资源、一个事件、作者自己的成员,或父类里类型不同的同名成员。父类里同名、类型兼容的对象属性会被直接复用。',
+        fix: '给 ViewModel 或冲突的那一方改名。',
+    },
+    6017: {
+        title: 'viewmodels 的来源用不了',
+        explain: '`= new` 要创建一个实例,抽象类创建不了。',
+        fix: '换成具体的子类,或改成由宿主给 / `global` / `parent`。',
+    },
+    6018: {
+        title: '路由的函数找不到',
+        explain: '`-> Settings.Apply` 这类路由,最后一段要是前面那个对象的类上一个 BlueprintCallable 的函数。',
+        fix: '改正函数名,或给函数加上 BlueprintCallable。',
+    },
+    6019: {
+        title: '路由的参数对不上',
+        explain: '写了括号(`-> Settings.SetVolume(Value)`),括号里的参数个数和类型要和函数一致,事件自己的参数可以按名字用;不写括号(`-> Settings.SetVolume`),函数要么不带参数,要么参数和事件发出来的完全一样,原样转发。',
+        fix: '按函数的参数改括号里的写法;或者加上括号显式传参。',
+    },
+    6020: {
+        title: '<-> 写不回去',
+        explain: '`Value <-> Settings.Volume` 要把控件改的值写回 `Volume`:对象有 BlueprintCallable 的 `SetVolume` 就调用它,没有就直接写属性。属性只读(不是 BlueprintReadWrite)又没有 `SetVolume` 时,两条路都走不通。',
+        fix: '给属性加 BlueprintReadWrite,或在对象上提供 `Set<成员>` 函数;只需要单向显示就改用 `<-`。',
+    },
+    6021: {
+        title: '循环条目上没有这个成员',
+        explain: '循环源的元素类型已知(`TArray<UItemVM*>`,不是 `TArray<UObject*>`)时,`Item.Member` 在编译时就按这个类检查。元素是 UObject 时要到运行时才知道类,对不上的那一行会被静默跳过。',
+        fix: '改正成员名,或确认循环源的元素类型就是有这个成员的类。',
+    },
+    6022: {
+        title: '循环条目的路由对不上',
+        explain: '元素类型已知时,`-> Item.Func` 的函数要在元素类上存在、可以从蓝图调用,并且不带参数,或者参数和事件发出来的完全一样。',
+        fix: '改正函数名或参数;需要额外参数时,把逻辑放进条目自己的函数里。',
     },
     6014: {
         title: 'events 的名字已经被占用',

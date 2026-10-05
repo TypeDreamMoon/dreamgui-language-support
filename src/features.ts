@@ -17,7 +17,8 @@ import {
     borrowableNames, namespacesVisibleFrom, namespaceMembers, componentFacts, ComponentFacts, hoverAt,
     anonymousNodeAt, propSignature, eventSignature, baseName,
 } from './core/componentIntel';
-import { tailsAfter } from './core/symbolFacts';
+import { tailsAfter, ViewModelMember } from './core/symbolFacts';
+import { memberRunAt, viewModelClassNames, viewModelMembersAt } from './core/viewModelIntel';
 import { PROP_TYPES, RESOURCE_TYPES, TOP_LEVEL_KEYWORDS } from './core/vocabulary';
 
 /** Re-opens the suggest widget after an item that leaves the cursor where another choice is due (`emit `, `nier.`). */
@@ -82,6 +83,49 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             const index = await indexFor(document);
             const symbols = store.symbols;
             const structure = model.structure;
+
+            // `Player.▌`, `Player.Stats.▌`, `Item.▌` over a view model's list: the members of the class the path
+            // reaches, from the plugin's export. What is offered follows what the path is for: a route calls a
+            // function, `<->` writes a property back, a loop draws from an array, an expression reads anything.
+            const viewModelRun = viewModelMembersAt(symbols, structure, line, document.offsetAt(position));
+            if (viewModelRun) {
+                const run = memberRunAt(line)!;
+                const before = line.slice(0, line.length - run.segments.join('.').length - run.partial.length - 1);
+                const purpose = /(?:->|\+=|=)\s*$/u.test(before) && !/(?:<-|<->|==|!=|<=|>=)\s*$/u.test(before) ? 'route'
+                    : /<->\s*$/u.test(before) ? 'twoWay'
+                        : /\bin\s+$/u.test(before) ? 'source' : 'read';
+                const fits = (member: ViewModelMember): boolean => {
+                    switch (purpose) {
+                        case 'route': return member.kind === 'function';
+                        case 'twoWay': return member.kind === 'property' && member.writable === true;
+                        case 'source': return /^Array<|^Object</u.test(member.type);
+                        default: return member.kind === 'property' || member.type !== 'Void';
+                    }
+                };
+                for (const [name, member] of viewModelRun.members) {
+                    if (!fits(member)) {
+                        continue;
+                    }
+                    const item = new vscode.CompletionItem(name,
+                        member.kind === 'function' ? vscode.CompletionItemKind.Method : vscode.CompletionItemKind.Field);
+                    const params = (member.params ?? []).map((param) => `${param.type} ${param.name}`).join(', ');
+                    item.detail = member.kind === 'function'
+                        ? `${name}(${params}) → ${member.type}${member.fieldNotify ? ' · FieldNotify' : ''}`
+                        : `${member.type}${member.fieldNotify ? ' · FieldNotify' : ' · read every frame'}${member.writable ? ' · writable' : ''}`;
+                    if (member.tooltip) {
+                        item.documentation = member.tooltip;
+                    }
+                    if (member.kind === 'function' && purpose === 'read') {
+                        item.insertText = new vscode.SnippetString(
+                            (member.params ?? []).length === 0 ? `${name}()` : `${name}(\${1:${params}})`);
+                    }
+                    if (/^Object</u.test(member.type) && purpose !== 'route') {
+                        item.command = RETRIGGER;
+                    }
+                    items.push(item);
+                }
+                return items;
+            }
 
             const instance = (): ComponentFacts | undefined =>
                 index && scope?.kind === 'node' ? componentFacts(index, file, scope.name) : undefined;
@@ -396,6 +440,33 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                 case 'events':
                     // An event's name is new by definition; its parameters' types complete inside the parentheses.
                     return items;
+                case 'viewmodels': {
+                    // `Type Name`, then `= new | global | parent`. The types are the classes the plugin's export
+                    // lists; after the name and its '=', the three sources.
+                    if (/=\s*\w*$/u.test(line)) {
+                        items.push(keywordItem('new', 'new', 'this widget makes one'));
+                        items.push(keywordItem('global', 'global', 'from UDreamViewModelSubsystem, by class'));
+                        items.push(keywordItem('global "…"', new vscode.SnippetString('global "${1:Name}"'),
+                            'from UDreamViewModelSubsystem, by class and name'));
+                        items.push(keywordItem('parent', 'parent', "the nearest enclosing widget's view model of this class"));
+                        return items;
+                    }
+                    if (/^\s*[\w/.\u00A0-\uFFFF]*$/u.test(line)) {
+                        for (const { name, info } of viewModelClassNames(symbols)) {
+                            if (info.abstract) {
+                                continue;
+                            }
+                            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Class);
+                            item.detail = info.class ?? 'view model';
+                            if (info.tooltip) {
+                                item.documentation = info.tooltip;
+                            }
+                            item.insertText = `${name} `;
+                            items.push(item);
+                        }
+                    }
+                    return items;
+                }
                 case 'slotLines': {
                     for (const info of symbols?.slotProperties ?? []) {
                         items.push(propertyItem(info));
@@ -623,6 +694,19 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                     group.children.push(new vscode.DocumentSymbol(prop.name,
                         prop.defaultText ? `${prop.type} = ${prop.defaultText}` : prop.type,
                         vscode.SymbolKind.Property, range, range.contains(selection) ? selection : range));
+                }
+                out.push(group);
+            }
+            const viewModels = model.structure.viewModels ?? [];
+            if (viewModels.length > 0) {
+                const first = lines(viewModels[0].line, viewModels[viewModels.length - 1].line);
+                const group = new vscode.DocumentSymbol('viewmodels', '', vscode.SymbolKind.Namespace, first, first);
+                for (const decl of viewModels) {
+                    const range = document.lineAt(Math.max(0, decl.line - 1)).range;
+                    const selection = span(decl.nameStart, decl.nameStart + decl.name.length);
+                    const source = decl.source === 'host' ? '' : ` = ${decl.source}${decl.sourceName ? ` "${decl.sourceName}"` : ''}`;
+                    group.children.push(new vscode.DocumentSymbol(decl.name, `${decl.type}${source}`,
+                        vscode.SymbolKind.Variable, range, range.contains(selection) ? selection : range));
                 }
                 out.push(group);
             }

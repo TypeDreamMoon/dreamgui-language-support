@@ -36,6 +36,11 @@ export type TokenKind =
     | 'arrow'
     /** `<->` -- the two-way binding arrow, three characters. */
     | 'twoWayArrow'
+    /**
+     * `+=` -- routes an event as one more listener. One token rather than `+` and `=`: `+` alone leads a component
+     * line, and a `+` with an `=` straight after it begins nothing else the grammar has. Lexed before the single '+'.
+     */
+    | 'plusEquals'
     | 'plus'
     | 'at'
     /**
@@ -174,7 +179,9 @@ export const RESERVED_WORDS: ReadonlySet<string> =
  *   `if`      leading a node-body statement, before something a condition can begin with;
  *   `else`    after an `if` block's '}', before '{' or `if`;
  *   `default` among a `slot` declaration's clauses;
- *   `fill`    after '@' at the head of a slot line, alone or before a weight.
+ *   `fill`    after '@' at the head of a slot line, alone or before a weight;
+ *   `viewmodels` at the top of a file, before '{';
+ *   `new`, `global`, `parent` after the '=' of a `viewmodels` line.
  *
  * The compiler's own rule (the file comment of DreamUISourceFile.cpp): a grammar that grows must not
  * take a working file away from its author, so `Text if { }`, `props = 2` and `else <- Other()` all
@@ -183,7 +190,7 @@ export const RESERVED_WORDS: ReadonlySet<string> =
  * a DUI3002 the compiler does not raise.
  */
 export const CONTEXTUAL_KEYWORDS: ReadonlySet<string> =
-    new Set(['as', 'props', 'events', 'emit', 'if', 'else', 'default', 'fill']);
+    new Set(['as', 'props', 'events', 'emit', 'if', 'else', 'default', 'fill', 'viewmodels', 'new', 'global', 'parent']);
 
 /**
  * `NAME_SIZE` from the engine's UnrealNames.h -- the one length rule this grammar has, and the
@@ -254,6 +261,11 @@ class Lexer {
             }
             if (isIdentifierStart(code)) {
                 this.lexIdentifier();
+                continue;
+            }
+            if (code === 0x2b /* + */ && this.peekCode(1) === 0x3d /* = */) {
+                // `+=`, before the single '+' of SINGLE_CHAR_KINDS -- the compiler's lexer checks it in the same place.
+                this.emitPunctuation('plusEquals', 2);
                 continue;
             }
             if (code === 0x2d /* - */ && this.peekCode(1) === 0x3e /* > */) {

@@ -40,10 +40,13 @@ export const KEYWORDS: readonly string[] = [
     'class', 'use', 'as', 'resources', 'style', 'timeline', 'external', 'props', 'events',
     'slot', 'default', 'for', 'each', 'in', 'if', 'else', 'was',
     'emit', 'ease', 'duration', 'loop',
+    'viewmodels', 'new', 'global', 'parent',
 ];
 
 /** The statements a file's top level holds, besides its one root node. */
-export const TOP_LEVEL_KEYWORDS: readonly string[] = ['class', 'use', 'resources', 'props', 'events', 'style', 'timeline'];
+export const TOP_LEVEL_KEYWORDS: readonly string[] = [
+    'class', 'use', 'resources', 'props', 'events', 'viewmodels', 'style', 'timeline',
+];
 
 /** The five resource types, for a dump too old to say. */
 export const RESOURCE_TYPES: readonly string[] = ['Color', 'Number', 'Vector2', 'String', 'Asset'];

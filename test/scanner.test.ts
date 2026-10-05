@@ -301,7 +301,8 @@ test('the real SettingsPanel.dui produces zero lexical diagnostics', () => {
 test('the reserved words are the compiler\'s twelve, and the contextual ones are none of them', () => {
     assert.deepEqual([...RESERVED_WORDS].sort(),
         ['class', 'each', 'ease', 'external', 'for', 'in', 'resources', 'slot', 'style', 'timeline', 'use', 'was']);
-    assert.deepEqual([...CONTEXTUAL_KEYWORDS].sort(), ['as', 'default', 'else', 'emit', 'events', 'fill', 'if', 'props']);
+    assert.deepEqual([...CONTEXTUAL_KEYWORDS].sort(),
+        ['as', 'default', 'else', 'emit', 'events', 'fill', 'global', 'if', 'new', 'parent', 'props', 'viewmodels']);
     for (const word of CONTEXTUAL_KEYWORDS) {
         assert.equal(RESERVED_WORDS.has(word), false, word);
     }

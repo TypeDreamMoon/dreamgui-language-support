@@ -9,6 +9,7 @@
     { "include": "#resources-block" },
     { "include": "#props-block" },
     { "include": "#events-block" },
+    { "include": "#viewmodels-block" },
     { "include": "#timeline-external" },
     { "include": "#timeline-block" },
     { "include": "#style-declaration" },
@@ -24,6 +25,7 @@
     { "include": "#key-override" },
     { "include": "#two-way-binding" },
     { "include": "#emit-route" },
+    { "include": "#member-route" },
     { "include": "#event-route" },
     { "include": "#binding" },
     { "include": "#property-assignment" },
@@ -149,6 +151,36 @@
           "match": "(?:^|(?<=[;{]))\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
           "captures": { "1": { "name": "entity.name.function.event.dui" } }
         }
+      ]
+    },
+    "viewmodels-block": {
+      "comment": "`viewmodels { PlayerVM Player  SettingsVM Settings = new  InventoryVM Stash = global \"Stash\" }`, one entry per line or per `;`. The type is a class -- a name, an alias or a path -- coloured as one; `new`, `global` and `parent` are keywords only after the `=` here.",
+      "begin": "^\\s*(viewmodels)\\s*(\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.viewmodels.dui" },
+        "2": { "name": "punctuation.section.block.begin.dui" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.dui" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "match": "(?:^|(?<=[;{]))\\s*(/[\\w/.\\u00A0-\\uFFFF]+|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+          "captures": {
+            "1": { "name": "entity.name.type.class.dui" },
+            "2": { "name": "entity.name.variable.viewmodel.dui" }
+          }
+        },
+        {
+          "match": "(=)\\s*(new|global|parent)\\b",
+          "captures": {
+            "1": { "name": "keyword.operator.assignment.dui" },
+            "2": { "name": "keyword.control.viewmodel-source.dui" }
+          }
+        },
+        { "include": "#values" }
       ]
     },
     "timeline-external": {
@@ -356,7 +388,7 @@
       }
     },
     "two-way-binding": {
-      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)?",
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)?",
       "captures": {
         "1": { "name": "variable.other.property.dui" },
         "2": { "name": "keyword.operator.binding.two-way.dui" },
@@ -365,7 +397,7 @@
     },
     "emit-route": {
       "comment": "`OnClick -> emit Picked(Index)`: raises an event this file declares, its arguments binding expressions. `emit` is the keyword only with an event name after it; `OnClick -> emit` alone still names a handler called emit, and is the event-route rule's.",
-      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*(emit)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->|\\+=|=(?!=))\\s*(emit)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
       "beginCaptures": {
         "1": { "name": "variable.other.event.dui" },
         "2": { "name": "keyword.operator.event-route.dui" },
@@ -378,8 +410,23 @@
         { "include": "#expression" }
       ]
     },
+    "member-route": {
+      "comment": "`OnClicked += Settings.Apply()`, `OnValueChanged -> Settings.SetVolume(Value)`, `OnInit = Party.Ready`: a function of an object the class holds, after any route operator. A dotted name after `=` is always a route -- no value is one. The arguments are binding expressions.",
+      "begin": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->|\\+=|=(?!=))\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)\\.([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "beginCaptures": {
+        "1": { "name": "variable.other.event.dui" },
+        "2": { "name": "keyword.operator.event-route.dui" },
+        "3": { "name": "variable.other.dui" },
+        "4": { "name": "entity.name.function.handler.dui" }
+      },
+      "end": "(?=[;}])|(?=\\\\s+[A-Za-z_\\\\u00A0-\\\\uFFFF][\\\\w.\\\\u00A0-\\\\uFFFF]*\\\\s*(?:=(?!=)|<->|<-|->|\\\\+=))|$",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#expression" }
+      ]
+    },
     "event-route": {
-      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
+      "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(->|\\+=)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)",
       "captures": {
         "1": { "name": "variable.other.event.dui" },
         "2": { "name": "keyword.operator.event-route.dui" },

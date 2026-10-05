@@ -38,6 +38,30 @@ export interface ClassInfo {
     events?: string[];
 }
 
+/**
+ * One member of a view model class, as the plugin's export (version 2) describes it: what `Player.▌` offers.
+ * `type` is pin-like -- `Text`, `Float`, `Object<StatsVM>`, `Array<Object<ItemVM>>` -- which is what lets a path go on
+ * through an object member.
+ */
+export interface ViewModelMember {
+    kind: 'property' | 'function';
+    type: string;
+    /** The member announces its changes: a binding through it updates on a change instead of every frame. */
+    fieldNotify?: boolean;
+    /** A property `<->` can write back: BlueprintReadWrite, or a BlueprintCallable `Set<Name>` on the class. */
+    writable?: boolean;
+    tooltip?: string;
+    params?: { name: string; type: string }[];
+}
+
+/** A class a `viewmodels` entry can name, keyed by its reflected name (or its path, when two share a name). */
+export interface ViewModelClass {
+    class?: string;
+    tooltip?: string;
+    abstract?: boolean;
+    members: Record<string, ViewModelMember>;
+}
+
 export interface SymbolData {
     version: number;
     tags: Record<string, ClassInfo>;
@@ -53,6 +77,8 @@ export interface SymbolData {
     annotations: string[];
     /** The types of a `props` line and an `events` parameter. Always present after normalizeSymbols. */
     propTypes: string[];
+    /** The classes a `viewmodels` entry can name, and their members. Empty for a dump older than version 2. */
+    viewModels: Record<string, ViewModelClass>;
 }
 
 /**
@@ -126,7 +152,25 @@ export function normalizeSymbols(raw: unknown): SymbolData {
         keywords: strings(source.keywords, KEYWORDS),
         annotations: strings(source.annotations, ANNOTATIONS),
         propTypes: strings(source.propTypes, PROP_TYPES),
+        viewModels: normalizeViewModels(source.viewModels),
     };
+}
+
+function normalizeViewModels(raw: unknown): Record<string, ViewModelClass> {
+    const out: Record<string, ViewModelClass> = {};
+    for (const [name, info] of Object.entries(asRecord<Partial<ViewModelClass>>(raw))) {
+        if (!info || typeof info !== 'object') {
+            continue;
+        }
+        const members: Record<string, ViewModelMember> = {};
+        for (const [member, entry] of Object.entries(asRecord<Partial<ViewModelMember>>(info.members))) {
+            if (entry && (entry.kind === 'property' || entry.kind === 'function') && typeof entry.type === 'string') {
+                members[member] = entry as ViewModelMember;
+            }
+        }
+        out[name] = { class: info.class, tooltip: info.tooltip, abstract: info.abstract, members };
+    }
+    return out;
 }
 
 /** The node types the dump lists, with their kind: what completion offers where a node's type goes. */

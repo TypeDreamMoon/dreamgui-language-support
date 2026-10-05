@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.10.0 — 2026-10-06
+
+Follows DreamGUI's view models (`viewmodels { … }`, member paths, `+=` / `=` routes).
+
+- **`viewmodels { … }` reads clean**, with the compiler's own checks: a malformed line or a block inside a node is
+  DUI2021, a second entry of one name DUI3024. The entries are in the outline under `viewmodels`, their types coloured
+  as classes, and `viewmodels` completes at the top of a file. Inside the block the types complete from the classes the
+  plugin's export lists, and after `=` the four sources (`new`, `global`, `global "…"`, `parent`).
+- **Member paths** -- `Text <- Player.Name`, `Player.FormatGold(Player.Gold)`, `Value <-> Settings.Volume`,
+  `for Item in Inventory.Items` -- parse as the compiler parses them, and colour as a variable and its members.
+- **`+=` and `=` route events**, beside `->`: `OnClicked += Settings.Apply()`, `OnValueChanged += Settings.SetVolume(Value)`,
+  `OnInit = Party.Ready`, `OnPicked = emit Picked(1)`. A single word after `=` stays a value, as it does for the
+  compiler, whose builder makes it a route once it sees a delegate.
+- **`Player.▌` completes the view model's members** from the plugin's symbol export (version 2): properties with their
+  type, whether they announce their changes (FieldNotify) and whether `<->` can write them back, functions with their
+  parameters. The offer follows what the path is for -- a route offers functions, `<->` writable properties, a loop
+  source arrays -- and follows a path on through object members (`Player.Stats.▌`) and into a loop over a view model's
+  list (`Item.▌` in `for Item in Player.Items`). An older export completes nothing here, rather than guessing.
+- The diagnostic table explains DUI2021, DUI3024, DUI5023-5025 and DUI6015-6022.
+
 ## 0.9.3 — 2026-10-05
 
 - **The display name is now DreamGUI Language Support**, to match the new id. The Marketplace keeps

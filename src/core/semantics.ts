@@ -199,6 +199,12 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
     for (const event of structure.events ?? []) {
         push(event.nameStart, event.name.length, 'event', ['declaration']);
     }
+    // A view model is a variable of the class whose type is a class: the type coloured as one, the name as declared.
+    const viewModels = new Set((structure.viewModels ?? []).map((decl) => fold(decl.name)));
+    for (const decl of structure.viewModels ?? []) {
+        push(decl.typeStart, decl.type.length, 'class');
+        push(decl.nameStart, decl.name.length, 'variable', ['declaration']);
+    }
 
     const loopScopes = structure.scopes.filter((scope) => scope.kind === 'loop');
     for (const binding of structure.bindings) {
@@ -211,7 +217,14 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
             continue;
         }
         if (!binding.isVariable) {
-            push(binding.nameStart, binding.name.length, 'function');
+            // `Settings.Apply`, `Player.Format(…)`: the receiver path is variables, the last segment the function.
+            const lastDot = binding.name.lastIndexOf('.');
+            if (lastDot < 0) {
+                push(binding.nameStart, binding.name.length, 'function');
+            } else {
+                push(binding.nameStart, lastDot, 'variable');
+                push(binding.nameStart + lastDot + 1, binding.name.length - lastDot - 1, 'function');
+            }
             continue;
         }
         // A variable ref: a `<->` right side, or a bare identifier in a binding expression. When
@@ -226,6 +239,11 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
             push(binding.nameStart, head.length, 'parameter');
             if (dot >= 0) {
                 push(binding.nameStart + dot + 1, binding.name.length - dot - 1, 'variable');
+            }
+        } else if (viewModels.has(fold(head))) {
+            push(binding.nameStart, head.length, 'variable');
+            if (dot >= 0) {
+                push(binding.nameStart + dot + 1, binding.name.length - dot - 1, 'property');
             }
         } else if (props.has(fold(head))) {
             push(binding.nameStart, head.length, 'property');
