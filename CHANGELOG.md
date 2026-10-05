@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2 — 2026-10-05
+
+- **The extension is now `typedreammoon.dreamgui-language-support`.** The VS Code Marketplace keeps
+  every extension name it has ever seen reserved, and `dreamui-language-support` was taken, so the
+  extension could not be published under it. The repository moved with it, to
+  `TypeDreamMoon/dreamgui-language-support` (GitHub forwards the old address). The language, its
+  settings and its commands are unchanged: still `.dui`, still `dreamui.*`.
+- **A copy under the old id is noticed.** VS Code takes it for a different extension, and with both
+  enabled every diagnostic, completion and hover comes twice. The extension says so when it starts and
+  offers to uninstall it; `install-vscode-extension.ps1` removes it after installing.
+
 ## 0.9.1 — 2026-10-05
 
 DreamGUI 1.0.0 and its docs site, [gui.toolchain.64hz.cn](https://gui.toolchain.64hz.cn).

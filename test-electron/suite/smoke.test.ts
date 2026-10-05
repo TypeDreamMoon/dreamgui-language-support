@@ -52,7 +52,7 @@ async function settledDiagnostics(uri: vscode.Uri, budgetMs = 30000): Promise<vs
 
 suite(`DreamUI shell (${mode})`, () => {
     test('the extension activates', async () => {
-        const extension = vscode.extensions.getExtension('typedreammoon.dreamui-language-support');
+        const extension = vscode.extensions.getExtension('typedreammoon.dreamgui-language-support');
         assert.ok(extension, 'the extension under development is not installed in this window');
         await extension.activate();
     });

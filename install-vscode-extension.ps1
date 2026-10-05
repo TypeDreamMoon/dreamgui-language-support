@@ -69,3 +69,11 @@ Write-Host "Installing $(Split-Path -Leaf $VsixPath)" -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) {
     throw "VSCode extension install failed with exit code $LASTEXITCODE."
 }
+
+# Up to 0.9.1 the extension's id was typedreammoon.dreamui-language-support. VSCode treats a copy under
+# that id as another extension, and the two would both serve .dui files.
+$oldId = "typedreammoon.dreamui-language-support"
+if ((& $codeCommand --list-extensions) -contains $oldId) {
+    Write-Host "Uninstalling the copy under the old id $oldId" -ForegroundColor Cyan
+    & $codeCommand --uninstall-extension $oldId
+}
