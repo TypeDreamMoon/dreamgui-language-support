@@ -1,8 +1,8 @@
 {
   "name": "dreamgui-language-support",
-  "displayName": "DreamUI Language Support",
+  "displayName": "DreamGUI Language Support",
   "description": "Language support for DreamGUI .dui widget hierarchies: completion, hover, outline, diagnostics, driven by symbols the Unreal plugin exports.",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",

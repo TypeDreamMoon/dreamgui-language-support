@@ -1,4 +1,4 @@
-# DreamUI Language Support
+# DreamGUI Language Support
 
 [English](README.md) | 简体中文
 

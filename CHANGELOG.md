@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3 — 2026-10-05
+
+- **The display name is now DreamGUI Language Support**, to match the new id. The Marketplace keeps
+  display names unique too, and refused 0.9.2 because "DreamUI Language Support" was taken; 0.9.2 is
+  on GitHub only. Nothing else changes.
+
 ## 0.9.2 — 2026-10-05
 
 - **The extension is now `typedreammoon.dreamgui-language-support`.** The VS Code Marketplace keeps
