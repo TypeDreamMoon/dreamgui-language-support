@@ -33,7 +33,7 @@ export const PROP_TYPES: readonly string[] = [
 ];
 
 /** What may follow an `@` at the start of a line (besides an Asset resource used as a node type), and `@key`. */
-export const ANNOTATIONS: readonly string[] = ['slot', 'fill', 'key'];
+export const ANNOTATIONS: readonly string[] = ['slot', 'fill', 'key', 'note', 'max', 'noloc'];
 
 /** Every keyword of the grammar, contextual ones included -- the dump's `keywords`, in its order. */
 export const KEYWORDS: readonly string[] = [

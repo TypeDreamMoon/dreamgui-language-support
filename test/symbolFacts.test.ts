@@ -8,7 +8,7 @@ import * as assert from 'node:assert/strict';
 import {
     normalizeSymbols, nodeTypeNames, isContainerType, propertiesForTag, tailsAfter,
 } from '../src/core/symbolFacts';
-import { CONTAINER_TYPES, KEYWORDS, PROP_TYPES } from '../src/core/vocabulary';
+import { ANNOTATIONS, CONTAINER_TYPES, KEYWORDS, PROP_TYPES } from '../src/core/vocabulary';
 
 /** The shape the plugin wrote before kinds, containers, keywords and propTypes existed. */
 const OLD_DUMP = {
@@ -64,7 +64,7 @@ test('an old dump gets kinds, its containers as node types, Shown and the keywor
     assert.ok(data.widgetProperties.some((p) => p.name === 'Shown' && p.type === 'bool'));
     assert.deepEqual(data.keywords, [...KEYWORDS]);
     assert.deepEqual(data.propTypes, [...PROP_TYPES]);
-    assert.deepEqual(data.annotations, ['slot', 'fill', 'key']);
+    assert.deepEqual(data.annotations, [...ANNOTATIONS]);
     // What the old dump did say is kept as it was.
     assert.deepEqual(data.slotProperties, OLD_DUMP.slotProperties);
     assert.deepEqual(data.enums, OLD_DUMP.enums);

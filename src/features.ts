@@ -216,6 +216,18 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                         items.push(keywordItem('key', new vscode.SnippetString('key("${1:Key}")'),
                             'the localization key of this string'));
                     }
+                    // `@note("…")`, `@max(n)` and `@noloc` follow a string as `@key` does, in any order.
+                    if (/"(?:\s*@\w+(?:\([^)]*\))?)*\s*@\w*$/u.test(line)) {
+                        if (!items.some(item => item.label === 'key')) {
+                            items.push(keywordItem('key', new vscode.SnippetString('key("${1:Key}")'),
+                                'the localization key of this string'));
+                        }
+                        items.push(keywordItem('note', new vscode.SnippetString('note("${1:What it is for}")'),
+                            'a note for the translator'));
+                        items.push(keywordItem('max', new vscode.SnippetString('max(${1:16})'),
+                            'the longest a translation may be, in display width (a full-width character counts 2)'));
+                        items.push(keywordItem('noloc', 'noloc', 'the same text in every language: never translated'));
+                    }
                     return items;
                 }
 

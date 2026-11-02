@@ -2413,34 +2413,40 @@ class Parser {
         }
     }
 
-    /** ParseOptionalKeyOverride: `@key("Some.Key")` after a value, stepped over the way the compiler steps over it. */
+    /**
+     * ParseTextAnnotations: `@key("Some.Key")`, `@note("…")`, `@max(n)` and `@noloc` after a value, in any order, stepped
+     * over the way the compiler steps over them. A repeated one is stepped over too (the compiler's DUI2022).
+     */
     private parseKeyOverride(): void {
-        if (!this.check('at') || this.peek(1).kind !== 'identifier') {
-            return;
+        while (this.check('at') && this.peek(1).kind === 'identifier') {
+            const name = this.peek(1).text;
+            if (name !== 'key' && name !== 'note' && name !== 'max' && name !== 'noloc') {
+                this.recover(); // "'@key(\"...\")', '@note(\"...\")', '@max(n)' and '@noloc' are the annotations a value takes", DUI2001
+                return;
+            }
+            this.advance(); // '@'
+            this.advance(); // the name
+            if (name === 'noloc') {
+                continue;
+            }
+            if (!this.check('openParen')) {
+                this.recover();
+                return;
+            }
+            this.advance();
+            if (!this.check(name === 'max' ? 'number' : 'string')) {
+                this.skipPastCloseParen();
+                this.recover();
+                return;
+            }
+            this.advance();
+            if (!this.check('closeParen')) {
+                this.skipPastCloseParen();
+                this.recover();
+                return;
+            }
+            this.advance();
         }
-        if (this.peek(1).text !== 'key') {
-            this.recover(); // "'@key(\"...\")' is the only annotation a value takes", DUI2001
-            return;
-        }
-        this.advance(); // '@'
-        this.advance(); // 'key'
-        if (!this.check('openParen')) {
-            this.recover();
-            return;
-        }
-        this.advance();
-        if (!this.check('string')) {
-            this.skipPastCloseParen();
-            this.recover();
-            return;
-        }
-        this.advance();
-        if (!this.check('closeParen')) {
-            this.skipPastCloseParen();
-            this.recover();
-            return;
-        }
-        this.advance();
     }
 
     // ---- components and slot lines -------------------------------------------------------------

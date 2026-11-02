@@ -23,6 +23,7 @@
     { "include": "#slot-block" },
     { "include": "#slot-property" },
     { "include": "#key-override" },
+    { "include": "#text-annotation" },
     { "include": "#two-way-binding" },
     { "include": "#emit-route" },
     { "include": "#member-route" },
@@ -387,6 +388,21 @@
         "2": { "name": "punctuation.section.parens.begin.dui" }
       }
     },
+    "text-annotation": {
+      "patterns": [
+        {
+          "match": "(@(?:note|max))\\s*(\\()",
+          "captures": {
+            "1": { "name": "keyword.control.directive.annotation.dui" },
+            "2": { "name": "punctuation.section.parens.begin.dui" }
+          }
+        },
+        {
+          "match": "@noloc\\b",
+          "name": "keyword.control.directive.annotation.dui"
+        }
+      ]
+    },
     "two-way-binding": {
       "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)\\s*(<->)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w.\\u00A0-\\uFFFF]*)?",
       "captures": {
@@ -473,6 +489,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#key-override" },
+        { "include": "#text-annotation" },
         { "include": "#values" },
         { "include": "#enum-value" }
       ]

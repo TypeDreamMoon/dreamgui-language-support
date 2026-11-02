@@ -512,6 +512,18 @@ test('one-line blocks: each statement is its own property, after spaces or a ";"
     assertScope(lines, 3, '@key', 'keyword.control.directive.key.dui');
 });
 
+test('@note, @max and @noloc after a string are annotations, not resource references', async () => {
+    const lines = await tokenize([
+        '        Text = "设置" @note("页面标题") @max(12)',
+        '        Text = "v1.0.3" @noloc',
+    ]);
+    assertScope(lines, 0, '@note', 'keyword.control.directive.annotation.dui');
+    assertNoScope(lines, 0, '@note', 'variable.other.constant.resource-ref.dui');
+    assertScope(lines, 0, '@max', 'keyword.control.directive.annotation.dui');
+    assertScope(lines, 1, '@noloc', 'keyword.control.directive.annotation.dui');
+    assertNoScope(lines, 1, '@noloc', 'variable.other.constant.resource-ref.dui');
+});
+
 test('a binding comparing with == does not end at the second =', async () => {
     const lines = await tokenize(['        Shown <- Count == 0 && !IsLocked()']);
     assertScope(lines, 0, 'Shown', 'variable.other.property.dui');
