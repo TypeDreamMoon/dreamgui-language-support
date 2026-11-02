@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+Follows DreamGUI's translator annotations and its DreamLoc checks.
+
+- **`@note("…")`, `@max(n)` and `@noloc`** after a string read clean, in any order with `@key`, colour as annotations and
+  complete after a string's `@`.
+- **Hover on a string shows its translations**: every language's text for it in the project's DreamLoc `.dloc` files
+  (`DLoc/<culture>/<the .dui's path>.dloc`), each linked to its line, stale and reviewed ones marked. Read only;
+  DreamLoc need not be installed for it.
+- **DUI2022** (an annotation written wrong), **DUI6023**, **DUI6024** (a translation that does not fit its text) and
+  **DUI6025** (a translation with characters the font lacks) explain themselves.
+
 ## 0.10.0 — 2026-10-06
 
 Follows DreamGUI's view models (`viewmodels { … }`, member paths, `+=` / `=` routes).
