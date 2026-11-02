@@ -26,6 +26,7 @@ import { registerFormatting } from './formatting';
 import { registerBindingIntel } from './bindingIntel';
 import { registerDocumentLinks } from './documentLinks';
 import { registerRevealWatcher } from './revealWatcher';
+import { registerTranslationHover } from './translationHover';
 
 /**
  * The id this extension had up to 0.9.1. The Marketplace had the name reserved, so 0.9.2 took a new
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerNavigation(context, workspaceHost);
     registerRename(context);
     registerRefactors(context);
+    registerTranslationHover(context);
     const bridge = registerBridge(context);
     const bridgeCache = registerBridgeCompletion(context, bridge, workspaceHost);
     registerBridgeCommands(context, bridge);
