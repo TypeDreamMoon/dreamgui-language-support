@@ -490,8 +490,49 @@
         { "include": "#comments" },
         { "include": "#key-override" },
         { "include": "#text-annotation" },
+        { "include": "#container" },
         { "include": "#values" },
         { "include": "#enum-value" }
+      ]
+    },
+    "container": {
+      "patterns": [
+        {
+          "name": "meta.list.dui",
+          "begin": "\\[",
+          "beginCaptures": { "0": { "name": "punctuation.section.brackets.begin.dui" } },
+          "end": "\\]",
+          "endCaptures": { "0": { "name": "punctuation.section.brackets.end.dui" } },
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#container" },
+            { "include": "#values" },
+            { "match": ",", "name": "punctuation.separator.comma.dui" },
+            { "include": "#enum-value" }
+          ]
+        },
+        {
+          "name": "meta.map.dui",
+          "begin": "\\{",
+          "beginCaptures": { "0": { "name": "punctuation.section.braces.begin.dui" } },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.section.braces.end.dui" } },
+          "patterns": [
+            { "include": "#comments" },
+            {
+              "match": "([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)\\s*(:)",
+              "captures": {
+                "1": { "name": "variable.other.key.dui" },
+                "2": { "name": "punctuation.separator.key-value.dui" }
+              }
+            },
+            { "match": ":", "name": "punctuation.separator.key-value.dui" },
+            { "include": "#container" },
+            { "include": "#values" },
+            { "match": ",", "name": "punctuation.separator.comma.dui" },
+            { "include": "#enum-value" }
+          ]
+        }
       ]
     },
     "enum-value": {
