@@ -12,6 +12,13 @@ Follows DreamGUI's translator annotations and its DreamLoc checks.
 - **DUI2022** (an annotation written wrong), **DUI6023**, **DUI6024** (a translation that does not fit its text) and
   **DUI6025** (a translation with characters the font lacks) explain themselves.
 
+Follows DreamGUI's list and map literals.
+
+- **`[a, b]` and `{ key: value }`** read clean as values -- across lines, with a trailing comma -- colour as a list and a
+  map (a map's bare keys as keys), and format on one line. A list or a map that never closes is **DUI2023**; one on a
+  property of the wrong kind is **DUI4009**, explained when the compiler sends it.
+- After `=` on an array, a set or a map property, completion offers `[ ]` or `{ key: value }`.
+
 ## 0.10.0 — 2026-10-06
 
 Follows DreamGUI's view models (`viewmodels { … }`, member paths, `+=` / `=` routes).
