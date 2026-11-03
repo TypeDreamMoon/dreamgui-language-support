@@ -26,6 +26,9 @@ export type TokenKind =
     | 'closeBrace'
     | 'openParen'
     | 'closeParen'
+    /** `[` and `]`, around a list value: `[1, 2]`. A `{` in a value's place is a map, and stays 'openBrace'. */
+    | 'openBracket'
+    | 'closeBracket'
     | 'comma'
     | 'dot'
     | 'colon'
@@ -713,6 +716,7 @@ class Lexer {
             case 0x2d: case 0x22: case 0x23: case 0x2f: case 0x3b:
             case 0x7b: case 0x7d: case 0x28: case 0x29: case 0x2c:
             case 0x2e: case 0x3a: case 0x3d: case 0x2b: case 0x40:
+            case 0x5b: case 0x5d:
                 return false;
             default:
                 return true;
@@ -739,6 +743,7 @@ class Lexer {
 const SINGLE_CHAR_KINDS = new Map<number, TokenKind>([
     [0x7b, 'openBrace'], [0x7d, 'closeBrace'],
     [0x28, 'openParen'], [0x29, 'closeParen'],
+    [0x5b, 'openBracket'], [0x5d, 'closeBracket'],
     [0x2c, 'comma'], [0x2e, 'dot'], [0x3a, 'colon'], [0x3d, 'equals'],
     [0x2b, 'plus'], [0x40, 'at'],
     [0x2a, 'star'], [0x25, 'percent'],

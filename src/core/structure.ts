@@ -598,9 +598,9 @@ class Parser {
             if (depth === 0 && (kind === 'separator' || kind === 'closeBrace')) {
                 return;
             }
-            if (kind === 'openBrace' || kind === 'openParen') {
+            if (kind === 'openBrace' || kind === 'openParen' || kind === 'openBracket') {
                 depth++;
-            } else if (kind === 'closeBrace' || kind === 'closeParen') {
+            } else if (kind === 'closeBrace' || kind === 'closeParen' || kind === 'closeBracket') {
                 depth = Math.max(0, depth - 1);
             }
             this.advance();
@@ -2372,6 +2372,14 @@ class Parser {
                     return false;
                 }
                 break;
+            case 'openBracket':
+            case 'openBrace':
+                // `[a, b]` for an array or a set, `{ key: value }` for a map -- a '{' reaches here only where a value is
+                // expected, never where a block opens (a block follows a header, not an operator).
+                if (!this.parseContainer()) {
+                    return false;
+                }
+                break;
             case 'at':
                 this.advance();
                 if (!this.check('identifier')) {
@@ -2407,6 +2415,41 @@ class Parser {
             } else if (token.kind === 'closeParen') {
                 depth--;
                 if (depth === 0) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    /**
+     * ParseContainer: a list or a map to its matching close, across lines -- inside, a newline is whitespace, as in a
+     * tuple. Brackets, braces and parentheses inside must pair; the end of the file first, or a close of the wrong
+     * kind, is DUI2023. The elements are values to the compiler; nothing inside is noted as a reference.
+     */
+    private parseContainer(): boolean {
+        const open = this.current();
+        const closes: TokenKind[] = [open.kind === 'openBracket' ? 'closeBracket' : 'closeBrace'];
+        this.advance();
+        for (;;) {
+            const token = this.current();
+            if (token.kind === 'end') {
+                this.error(2023, open.kind === 'openBracket' ? "this '[' never reaches its ']'" : "this '{' never reaches its '}'", open);
+                return false;
+            }
+            this.advance();
+            if (token.kind === 'openBracket') {
+                closes.push('closeBracket');
+            } else if (token.kind === 'openBrace') {
+                closes.push('closeBrace');
+            } else if (token.kind === 'openParen') {
+                closes.push('closeParen');
+            } else if (token.kind === 'closeBracket' || token.kind === 'closeBrace' || token.kind === 'closeParen') {
+                if (closes[closes.length - 1] !== token.kind) {
+                    this.error(2023, `a '${token.text}' closes what it did not open in this list or map`, token);
+                    return false;
+                }
+                closes.pop();
+                if (closes.length === 0) {
                     return true;
                 }
             }

@@ -28,9 +28,9 @@ function range(first: number, last: number): number[] {
  */
 const COMPILER_TABLE: number[] = [
     ...range(1001, 1007),
-    ...range(2001, 2022),
+    ...range(2001, 2023),
     ...range(3001, 3006), ...range(3008, 3024),
-    ...range(4001, 4008),
+    ...range(4001, 4009),
     ...range(5001, 5025),
     ...range(6001, 6025),
     ...range(7001, 7005),

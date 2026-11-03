@@ -81,6 +81,15 @@ const OPERAND_KINDS: ReadonlySet<string> = new Set<string>([
     'identifier', 'number', 'string', 'hexColor', 'assetPath', 'closeParen',
 ]);
 
+/**
+ * Whether a '{' after this token opens a map rather than a block: a block follows a header, a value follows an
+ * operator -- `=`, a list's or a map's `,` or `:`, a list's own `[`.
+ */
+function opensMap(previous: Token | undefined): boolean {
+    return previous !== undefined && (previous.kind === 'equals' || previous.kind === 'comma' || previous.kind === 'colon'
+        || previous.kind === 'openBracket');
+}
+
 /** A break the layout owes: see `pendingBreak`. */
 type PendingBreak = 'none' | 'soft' | 'hard';
 
@@ -109,6 +118,8 @@ function layout(text: string, options: FormatOptions): string {
     let lineVerbatim = false;
     let depth = 0;
     let parenDepth = 0;
+    /** The lists and maps the layout is inside, innermost last: each is laid out on one line. */
+    const containers: Array<'list' | 'map'> = [];
     /** The last token put on the current line -- what the spacing rules look back at. */
     let previous: Token | undefined;
     /**
@@ -162,7 +173,7 @@ function layout(text: string, options: FormatOptions): string {
             // statement whose span starts at its path, right after the `slot` it belongs to: one space there.)
             return '  ';
         }
-        if (kind === 'comma' || kind === 'closeParen' || kind === 'dot' || kind === 'semicolon') {
+        if (kind === 'comma' || kind === 'closeParen' || kind === 'closeBracket' || kind === 'dot' || kind === 'semicolon') {
             return '';
         }
         if (token && (shape.alignedStarts.has(token.start) || (kind === 'openBrace' && shape.rowEnds.has(previous.end)))) {
@@ -183,7 +194,7 @@ function layout(text: string, options: FormatOptions): string {
         if (kind === 'openParen' && token && shape.conditionStarts.has(token.start)) {
             return ' '; // `if (A || B) {` -- a condition, not a call to something named `if`
         }
-        if (before === 'dot' || before === 'openParen') {
+        if (before === 'dot' || before === 'openParen' || before === 'openBracket') {
             return '';
         }
         if ((before === 'at' || before === 'bang')
@@ -195,8 +206,8 @@ function layout(text: string, options: FormatOptions): string {
         if (kind === 'openParen' && !opensWasClause && OPERAND_KINDS.has(before)) {
             return ''; // a call, not a clause: GetHistory()
         }
-        if (kind === 'colon' && parenDepth > 0) {
-            return ''; // '(was: OldId)' -- the compiler's own spelling
+        if (kind === 'colon' && (parenDepth > 0 || containers.length > 0)) {
+            return ''; // '(was: OldId)', and a map's `Key: value` -- the compiler's own spellings
         }
         return ' ';
     };
@@ -250,6 +261,24 @@ function layout(text: string, options: FormatOptions): string {
         }
 
         const token = piece.token;
+        // Inside a list or a map a line break is whitespace, and the container is laid out on one line: `[a, b]`,
+        // `{ Key: value }`. A separator there ends nothing (the guard rail ignores separators, so this changes no meaning).
+        if (containers.length > 0 && token.kind === 'separator') {
+            continue;
+        }
+        if (token.kind === 'openBrace' && opensMap(previous)) {
+            append('{', gapBefore('openBrace', false, token));
+            containers.push('map');
+            previous = token;
+            unaryMinus = false;
+            continue;
+        }
+        if (token.kind === 'closeBrace' && containers[containers.length - 1] === 'map') {
+            containers.pop();
+            append('}', previous !== undefined && previous.kind === 'openBrace' ? '' : ' ');
+            previous = token;
+            continue;
+        }
         if (token.kind === 'separator' && token.text !== ';') {
             // A zero-width separator is the one the scanner invents after a block comment that
             // crossed a line, so that the statement the comment interrupted still ends. It sits on
@@ -325,6 +354,10 @@ function layout(text: string, options: FormatOptions): string {
             parenDepth++;
         } else if (token.kind === 'closeParen') {
             parenDepth = Math.max(0, parenDepth - 1);
+        } else if (token.kind === 'openBracket') {
+            containers.push('list');
+        } else if (token.kind === 'closeBracket' && containers[containers.length - 1] === 'list') {
+            containers.pop();
         }
     }
 

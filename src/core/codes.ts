@@ -169,6 +169,11 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         explain: '字符串后面可以跟 `@note("给译者的说明")`、`@max(n)`(译文最长多宽,按显示宽度算,全角算 2)和 `@noloc`(这串字每种语言都一样,不翻译),顺序随意,每样只写一次。`@note` 里只能是一个字符串,`@max` 里只能是一个不小于 1 的整数,它们只能跟在字符串后面;`@noloc` 不能和 `@key`、`@note`、`@max` 同时写,因为不翻译的字没有条目可言。',
         fix: '按 `Text = "应用" @note("底部按钮") @max(8)` 或 `Text = "v1.0.3" @noloc` 的样子改写,去掉重复的那个。',
     },
+    2023: {
+        title: '列表或 Map 读不通',
+        explain: '`[a, b]` 写数组或 Set,`{ 键: 值 }` 写 Map;每个元素(Map 的每个键和值)都是一个普通的值,可以跨行,末尾可以多一个逗号。括号一直没闭合、两个元素之间少了逗号、Map 的一项不是 `键: 值`,或者里面的括号配不上对,都报这一条。',
+        fix: '补上 `]` 或 `}`,元素之间用逗号隔开,Map 每项写成 `键: 值`。',
+    },
     2021: {
         title: 'viewmodels 里的一行写错了',
         explain: '`viewmodels { … }` 每行声明一个 ViewModel:`类型 名字`,后面可以跟 `= new`、`= global`、`= global "名字"`、`= parent` 或 `= parent "名字"`,说明对象从哪来;不写 `=` 就是由宿主给。别的写法、`global ""` 这种空名字、一行写两个名字,都在这里报。`viewmodels` 块写在节点里面也是这个码:它声明的是类有什么,属于文件顶层。',
@@ -337,6 +342,11 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
         title: '资源条目的类型和它自己的字面量不符',
         explain: '例如 `Color Accent = 8`——声明说是颜色,字面量却是数字。报在条目行,只报一次。',
         fix: '让类型关键字和字面量一致。',
+    },
+    4009: {
+        title: '列表或 Map 写在了不对的属性上',
+        explain: '`[a, b]` 只能写在数组或 Set 属性上,`{ 键: 值 }` 只能写在 Map 属性上;反过来,数组、Set、Map 属性也不能写单个值。只有数组能存节点 id,节点的 Set 和 Map 也在这里报。元素自己的类型不对,报的是那个元素该报的码。',
+        fix: '对照属性的类型改写:数组和 Set 用 `[…]`,Map 用 `{ 键: 值 }`,单个值去掉括号。',
     },
 
     // --- 5xxx 建树 ---
