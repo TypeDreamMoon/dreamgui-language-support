@@ -268,6 +268,21 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                         items.push(new vscode.CompletionItem('true', vscode.CompletionItemKind.Value));
                         items.push(new vscode.CompletionItem('false', vscode.CompletionItemKind.Value));
                     }
+                    // A container is written whole: `[a, b]` for an array or a set, `{ key: value }` for a map.
+                    const containerType = info?.type ?? '';
+                    if (containerType.startsWith('TArray') || containerType.startsWith('TSet')) {
+                        const item = new vscode.CompletionItem('[ ]', vscode.CompletionItemKind.Snippet);
+                        item.detail = containerType.startsWith('TSet') ? 'a set: [a, b]' : 'a list: [a, b]';
+                        item.insertText = new vscode.SnippetString('[$0]');
+                        item.sortText = '0';
+                        items.push(item);
+                    } else if (containerType.startsWith('TMap')) {
+                        const item = new vscode.CompletionItem('{ key: value }', vscode.CompletionItemKind.Snippet);
+                        item.detail = 'a map: { key: value }';
+                        item.insertText = new vscode.SnippetString('{ ${1:Key}: ${2:Value} }');
+                        item.sortText = '0';
+                        items.push(item);
+                    }
                     items.push(...resourceItems('@'));
                     return items;
                 }
