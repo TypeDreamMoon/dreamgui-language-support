@@ -54,3 +54,41 @@ test('a container is laid out on one line, and a map keeps its spelling', () => 
     assert.ok(formatted.includes('        None = {}\n'), formatted);
     assert.equal(formatDui(formatted, SPACES), formatted, 'formatting twice changes nothing more');
 });
+
+// ---- a struct value as a map, and its keyless first entry ---------------------------------------
+
+const RING = [
+    'Widget Root {',
+    '    Native.RingMenu Wheel {',
+    '        Items = [',
+    '            { "灯", Tag: Lamp },',
+    '            { "门", Tag: Door, bEnabled: false, Weight: 2 },',
+    '            { Label: "窗", Tag: Window },',
+    '        ]',
+    '        Single = { "灯", Tag: Lamp }',
+    '    }',
+    '    Text After { Text = "x" }',
+    '}',
+    '',
+].join('\n');
+
+test('a map\'s first entry may be a bare value: no diagnostic, and the rest of the file is still read', () => {
+    const structure = buildStructure(RING);
+    assert.deepEqual([...structure.lexical, ...structure.diagnostics], []);
+    const root = structure.roots[0];
+    assert.deepEqual(root.children.map((child) => child.id), ['Wheel', 'After']);
+    assert.deepEqual(root.children[0].properties.map((stmt) => stmt.path), ['Items', 'Single']);
+});
+
+test('a keyless entry is no excuse for a map closed by the wrong bracket', () => {
+    const structure = buildStructure('Widget Root {\n    Items = [{ "灯", Tag: Lamp ]\n}\n');
+    assert.ok(structure.diagnostics.some((diagnostic) => diagnostic.code === 2023));
+});
+
+test('a map of struct fields keeps its spelling when laid out, and is stable', () => {
+    const formatted = formatDui(RING, SPACES);
+    assert.ok(formatted.includes(
+        'Items = [{ "灯", Tag: Lamp }, { "门", Tag: Door, bEnabled: false, Weight: 2 }, { Label: "窗", Tag: Window },]\n'), formatted);
+    assert.ok(formatted.includes('Single = { "灯", Tag: Lamp }\n'), formatted);
+    assert.equal(formatDui(formatted, SPACES), formatted);
+});

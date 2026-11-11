@@ -740,3 +740,17 @@ test('@tag lines: the directive, each name and each comma; a node whose type is 
     assertNoScope(lines, 5, 'Trim', 'entity.name.label.widget-tag.dui');
     assertScope(lines, 6, 'Trim', 'entity.name.label.widget-tag.dui');
 });
+
+test('a struct value as a map: a keyless first entry is a value, the keys after it are keys', async () => {
+    const lines = await tokenize([
+        '        Items = [{ "灯", Tag: Lamp }, { "门", Tag: Door, bEnabled: false, Weight: 2 }, { Label: "窗", Tag: Window }]',
+    ]);
+    assertScope(lines, 0, '灯', 'string.quoted.double.dui');
+    assertScope(lines, 0, 'Tag', 'variable.other.key.dui');
+    assertScope(lines, 0, 'Lamp', 'support.constant.property-value.dui');
+    assertScope(lines, 0, 'bEnabled', 'variable.other.key.dui');
+    assertScope(lines, 0, 'false', 'constant.language.boolean.dui');
+    assertScope(lines, 0, 'Weight', 'variable.other.key.dui');
+    assertScope(lines, 0, 'Label', 'variable.other.key.dui');
+    assertScope(lines, 0, '窗', 'string.quoted.double.dui');
+});
