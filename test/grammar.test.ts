@@ -707,3 +707,36 @@ test('a clause of several styles: every name is a style, every colon a separator
     assertScope(lines, 5, 'RowList', 'entity.other.inherited-class.style.dui');
     assertScope(lines, 5, 'Dense', 'entity.other.inherited-class.style.dui');
 });
+
+test('@tag lines: the directive, each name and each comma; a node whose type is @tag stays a node', async () => {
+    const lines = await tokenize([
+        '    @tag Trim',
+        '    @tag Glow, UI.Accent  // note',
+        '    Image A { @tag One; @tag 描边, 高亮 }',
+        '    @tag Trim { }',
+        '    @tag Other : S { }',
+        '    // @tag Trim',
+        '    @tag Trim',
+    ]);
+    assertScope(lines, 0, '@', 'keyword.control.directive.tag.dui');
+    assertScope(lines, 0, 'tag', 'keyword.control.directive.tag.dui');
+    assertScope(lines, 0, 'Trim', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 1, 'Glow', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 1, ',', 'punctuation.separator.comma.dui');
+    assertScope(lines, 1, 'UI.Accent', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 1, '// note', 'comment.line.double-slash.dui');
+    assertScope(lines, 2, 'One', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 2, '描边', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 2, '高亮', 'entity.name.label.widget-tag.dui');
+    // The old resource-typed node is a node: its type is the tag colour, its name an id.
+    assertScope(lines, 3, '@tag', 'entity.name.tag.dui');
+    assertScope(lines, 3, 'Trim', 'entity.name.section.id.dui');
+    assertNoScope(lines, 3, '@tag', 'keyword.control.directive.tag.dui');
+    assertScope(lines, 4, 'Other', 'entity.name.section.id.dui');
+    assertScope(lines, 4, 'S', 'entity.other.inherited-class.style.dui');
+    // An indented comment is still a comment.
+    assertScope(lines, 5, '@tag', 'comment.line.double-slash.dui');
+    assertNoScope(lines, 5, '@tag', 'keyword.control.directive.tag.dui');
+    assertNoScope(lines, 5, 'Trim', 'entity.name.label.widget-tag.dui');
+    assertScope(lines, 6, 'Trim', 'entity.name.label.widget-tag.dui');
+});

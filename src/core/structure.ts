@@ -79,6 +79,8 @@ export interface StructNode {
      * keeps its dots. Absent when the node wears none.
      */
     styles?: StyleRef[];
+    /** The names of its `@tag` lines, each as written (a repeat is kept; the builder drops it). */
+    tags?: TagRef[];
     components: StructComponent[];
     /**
      * As written, branches included. A branch's own children are the arm's widgets; see `lowered` for the children
@@ -149,6 +151,15 @@ export interface StructComponent {
 
 /** One style name in a clause (`: Heading : nier.Glow`): as written, dots kept, and where its first word is. */
 export interface StyleRef {
+    name: string;
+    line: number;
+    column: number;
+    start: number;
+    end: number;
+}
+
+/** One name of a `@tag Trim, UI.Accent` line: as written, dots kept. */
+export interface TagRef {
     name: string;
     line: number;
     column: number;
@@ -1673,6 +1684,10 @@ class Parser {
                 this.parseFillShorthand(node.properties);
                 return;
             }
+            if (this.isTagLine()) {
+                this.parseTagLine(node);
+                return;
+            }
             if (this.peek(1).kind === 'identifier' && foldName(this.peek(1).text) !== 'slot') {
                 const child = this.parseNode();
                 if (child) {
@@ -2604,6 +2619,64 @@ class Parser {
         if (stmt) {
             this.anchors.set(stmt, at);
             out.push(stmt);
+        }
+    }
+
+    /**
+     * IsTagLine: `@tag Trim`, `@tag Glow, UI.Accent`. `tag` is a keyword only right after the '@' and only in lower case,
+     * and only where a resource called tag cannot stand as a node's type -- which it can when what follows is a dot,
+     * a '{' or a ':', or a word that a '{', a ':' or a '(' follows (`@tag X { }`, `@tag X : Style`, `@tag.Ink X`). Anything
+     * else after it is a tag line, and a badly shaped one is DUI2024 rather than a node nobody meant.
+     */
+    private isTagLine(): boolean {
+        if (!this.check('at') || this.peek(1).kind !== 'identifier' || this.peek(1).text !== 'tag') {
+            return false;
+        }
+        const next = this.peek(2).kind;
+        if (next === 'dot' || next === 'openBrace' || next === 'colon') {
+            return false;
+        }
+        if (next === 'identifier') {
+            const after = this.peek(3).kind;
+            return after !== 'openBrace' && after !== 'colon' && after !== 'openParen';
+        }
+        return true;
+    }
+
+    /**
+     * One or more names, dotted or not, separated by commas, and then the end of the statement. The names go to the
+     * node when it is a widget (or a slot); a branch and a loop hold no widget of their own, so what is written
+     * there is read and let go -- the compiler refuses it, and says so through the mailbox.
+     */
+    private parseTagLine(node: StructNode): void {
+        const at = this.current();
+        this.advance(); // '@'
+        this.advance(); // 'tag'
+        const tags: TagRef[] = [];
+        let wellFormed = true;
+        for (;;) {
+            if (!this.check('identifier')) {
+                wellFormed = false;
+                break;
+            }
+            const first = this.current();
+            const name = this.parseQualifiedName();
+            tags.push({ name: name.name, line: first.line, column: first.column, start: first.start, end: name.end });
+            if (!this.check('comma')) {
+                break;
+            }
+            this.advance();
+        }
+        if (wellFormed && !this.atStatementEnd()) {
+            wellFormed = false;
+        }
+        if (!wellFormed) {
+            this.error(2024, "'@tag' takes one or more names separated by commas, as in '@tag Trim, Glow'", at);
+            this.recover();
+            return;
+        }
+        if (node.kind === 'node' || node.kind === 'namedSlot') {
+            node.tags = [...(node.tags ?? []), ...tags];
         }
     }
 

@@ -237,6 +237,9 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                             items.push(keywordItem('slot', 'slot ', 'a panel-slot line: @slot Name = Value'));
                             items.push(keywordItem('fill', 'fill', '@slot SizeRule = Fill (@fill 2: and FillWeight = 2)'));
                         }
+                        if (scope.kind === 'node') {
+                            items.push(keywordItem('tag', 'tag ', 'tag this widget: @tag Name, Other.Name'));
+                        }
                     }
                     // `@Row Audio { … }`: an Asset resource naming a widget class is a node type too.
                     if (scope?.kind !== 'style' && scope?.kind !== 'component' && scope?.kind !== 'slotLines') {
@@ -551,7 +554,8 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                         items.push(item);
                     }
                     items.push(...nodeTypeItems('z')); // properties first, structure second
-                    items.push(keywordItem('@slot', '@slot '), keywordItem('@fill', '@fill'));
+                    items.push(keywordItem('@slot', '@slot '), keywordItem('@fill', '@fill'),
+                        keywordItem('@tag', '@tag ', 'tag this widget: @tag Name, Other.Name'));
                     const plus = new vscode.CompletionItem('+', vscode.CompletionItemKind.Operator);
                     plus.insertText = '+ ';
                     plus.detail = 'attach a behaviour or layout';

@@ -19,6 +19,7 @@
     { "include": "#conditional" },
     { "include": "#else" },
     { "include": "#component-line" },
+    { "include": "#tag-line" },
     { "include": "#fill-shorthand" },
     { "include": "#slot-block" },
     { "include": "#slot-property" },
@@ -345,6 +346,20 @@
         "2": { "name": "entity.name.type.component.dui" }
       }
     },
+    "tag-line": {
+      "comment": "`@tag Trim`, `@tag Glow, UI.Accent` -- names given to the widget that holds the line. Only when the names run to the end of the statement, so `@tag X { }`, `@tag X : S` and `@tag.Ink X` -- nodes whose type a resource called tag names -- are left to the node header. The match has no leading whitespace pattern: that could start at the indent of a `//` comment line.",
+      "match": "(@)(tag)[ \\t]+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:[ \\t]*,[ \\t]*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*)(?=[ \\t]*(?:$|[;}]|//|/\\*))",
+      "captures": {
+        "1": { "name": "keyword.control.directive.tag.dui" },
+        "2": { "name": "keyword.control.directive.tag.dui" },
+        "3": {
+          "patterns": [
+            { "match": ",", "name": "punctuation.separator.comma.dui" },
+            { "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*", "name": "entity.name.label.widget-tag.dui" }
+          ]
+        }
+      }
+    },
     "fill-shorthand": {
       "comment": "`@fill` alone, or with a weight: the shorthand for `@slot SizeRule = Fill` (and `@slot FillWeight = N`). Anything else after it -- `@fill Filler { }` -- is a node whose type a resource called fill names, and is left to the node header.",
       "match": "(@fill)\\b(?:\\s+(\\d+(?:\\.\\d+)?))?(?=\\s*(?:$|[;}]|//|/\\*))",
@@ -553,7 +568,7 @@
     },
     "node-header": {
       "comment": "`Type Id`, then `(was: Old)` and `: Style` in either order. The type is a tag, a container (`VerticalBox`), an alias (`Row`, `nier.Row`), `@Name`, a registry tag (`Native.Button`) or a path. With no id, a `{` or a style clause must follow (`HorizontalBox {`, `Text : Caption {`) -- a type alone on a line is the DUI2004 it always was. Also after a `{` or `;`, so a one-line body's child (`RectBlock Key : Cap { Text Label : Caption {} }`) is a node too. A path never starts `//` or `/*`: the rule's `\\s*` starts it at the indent, left of where a comment would, so an indented `// The note` would otherwise be a node of type `//` called The.",
-      "match": "(?:^|(?<=[{;]))\\s*(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)|(?=\\s*(?:\\{|:\\s*[A-Za-z_\\u00A0-\\uFFFF])))\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:\\s*:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*))?\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?",
+      "match": "(?:^|(?<=[{;]))\\s*(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)(?!tag[ \\t]+[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:[ \\t]*,[ \\t]*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*[ \\t]*(?:$|[;}]|//|/\\*))[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)|(?=\\s*(?:\\{|:\\s*[A-Za-z_\\u00A0-\\uFFFF])))\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:\\s*:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*))?\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?",
       "captures": {
         "1": { "name": "entity.name.tag.dui", "patterns": [ { "include": "#qualifier" } ] },
         "2": { "name": "entity.name.section.id.dui" },
