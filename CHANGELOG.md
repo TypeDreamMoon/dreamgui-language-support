@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.0 — 2026-11-12
+
+Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles.
+
+- **`@tag Trim`, `@tag Glow, UI.Accent`** lines inside a widget's block read as tags of that widget, no longer as a
+  child node of type `@tag` (which used to bring DUI2004 and friends). The directive and the names are coloured, and
+  `tag` completes after an `@` in a node block. `@tag X { }` and `@tag X : Style` are still the old resource-typed
+  node. A line of any other shape (no name, a number, two names with no comma, a trailing comma) is **DUI2024**, at
+  the `@`. A `@tag` in a style block or directly in an `if` or a loop is left to the compiler.
+- **`@slot Size = (w, h)`**, the shorthand for MinDesiredSize and MaxDesiredSize with one value, is offered by
+  `@slot ` completion (with the explanation) and is never flagged.
+- **A map's first entry may be a bare value** -- `{ "灯", Tag: Lamp }`, the struct's main field -- beside
+  `{ Field: value, … }` for struct values: `Items = [{ "灯", Tag: Lamp }, { "门", Tag: Door, bEnabled: false }]`.
+  Read clean, coloured and kept on one line by the formatter.
+- **`: A : B : …` on style declarations, nodes and `rows` headers.** Each name is checked on its own (an unknown one is
+  DUI3004 at that name; a cycle through any base is DUI3015) and coloured, renamed, indexed and followed with go to
+  definition wherever it stands in the clause, a `rows` header's included; the formatter and the grammar keep the
+  whole clause. Inline style is offered on any of them but refuses a node, or a chain, that has more than one.
+  **DUI3025** (a name already applied through an earlier one) explains itself; the compiler says it, the extension
+  does not guess at it.
+- **The old-id warning** is found by name, whoever published it, and looked for again whenever the installed
+  extensions change, asking once per id. (A window with only the old 0.7.0 copy installed still cannot see this
+  extension: install `typedreammoon.dreamgui-language-support`.)
+
 ## 0.11.0 — 2026-11-11
 
 Follows DreamGUI's translator annotations and its DreamLoc checks.

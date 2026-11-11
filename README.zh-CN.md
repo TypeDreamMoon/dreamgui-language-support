@@ -18,7 +18,8 @@ DreamGUI `.dui` 界面层级的语言支持。DreamGUI 和这门语言的文档�
   `use "Lib.dui" as nier`;带类型词的 `props { … }` 与 `events { … }`;`OnClick -> emit Picked(Index)`;
   `slot Rows default : RowList { … }` 与宿主里的 `slot Detail { … }`;容器作节点类型
   (`VerticalBox Column { Spacing = 29 }`)与不写 id 的节点(`HorizontalBox { … }`、`Text : Caption { … }`);
-  `@slot { A = 1  B = 2 }`、`@fill` 与 `@fill 2`;带命名空间的名字(`nier.Row`、`: nier.Label`、`@nier.Ink`);
+  一个子句里的多个样式(`Text Title : Heading : Glow`);`@slot { A = 1  B = 2 }`、`@slot Size = (120, 48)`、`@fill` 与 `@fill 2`;
+  `@tag Trim, Glow` 标签行;带命名空间的名字(`nier.Row`、`: nier.Label`、`@nier.Ink`);
   `if … else if … else`;`for Item in GetItems() { … }`;以及 `timeline` 块。一行写完的块
   (`+ UIButton { TransitionType = None  bCanNavigateHere = false }`、`Label = "MAP"; Icon = @IconMap`)
   里每条语句各按属性着色。

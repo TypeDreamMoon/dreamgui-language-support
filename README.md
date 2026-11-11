@@ -21,7 +21,8 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
   `use "Lib.dui" as nier`; `props { … }` and `events { … }` with their type words; `OnClick -> emit
   Picked(Index)`; `slot Rows default : RowList { … }` and a host's `slot Detail { … }`; containers as
   node types (`VerticalBox Column { Spacing = 29 }`) and nodes with no id (`HorizontalBox { … }`,
-  `Text : Caption { … }`); `@slot { A = 1  B = 2 }`, `@fill` and `@fill 2`; namespaced names
+  `Text : Caption { … }`); several styles in one clause (`Text Title : Heading : Glow`); `@slot { A = 1  B = 2 }`,
+  `@slot Size = (120, 48)`, `@fill` and `@fill 2`; `@tag Trim, Glow` lines; namespaced names
   (`nier.Row`, `: nier.Label`, `@nier.Ink`); `if … else if … else`; `for Item in GetItems() { … }`;
   and `timeline` blocks. A one-line block (`+ UIButton { TransitionType = None  bCanNavigateHere =
   false }`, `Label = "MAP"; Icon = @IconMap`) colours each statement as its own property.
@@ -32,7 +33,7 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
   enum values, slot properties, resource types, `@` resource references and `->` event names -- and
   for the component syntax: the aliases a file can use as node types (its own `use … as` lines and
   the ones its libraries re-export), `ns.` namespaces, prop and event types inside `props { }` /
-  `events { }`, `emit` and this file's events after `->`, `@slot` / `@fill` / `@key` after an `@`,
+  `events { }`, `emit` and this file's events after `->`, `@slot` / `@fill` / `@tag` / `@key` after an `@`,
   keywords only where they are legal, and on a component instance its props, events and slots.
   A node typed by a container offers the container's properties too, and `Shown` is a widget property.
 - **Colour chips and a picker** on every `#hex` literal -- properties, styles and resources alike.
@@ -48,7 +49,7 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
   **smart selection**.
 - **Diagnostics** with the compiler's own codes and wording, at the compiler's own severities:
   the six lexical codes (DUI1001–1006); the structural ones a single file settles
-  (DUI2002/2003/2004/2006/2013, the component syntax's 2015–2019, 3001/3002/3004/3005/3014/3015/3016,
+  (DUI2002/2003/2004/2006/2013, the component syntax's 2015–2019, 2024 for a malformed `@tag`, 3001/3002/3004/3005/3014/3015/3016,
   3017, 3019, 3020, 3022, 3021 where one file proves it, and 3018 for a class alias), plus as
   warnings the rename-clause checks (3010–3012), 3008, and what the workspace index makes certain
   (3004 for a namespaced style, 3018 for a file alias, 3021 from the imports, 4007); plus
