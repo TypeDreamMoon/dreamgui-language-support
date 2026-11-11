@@ -146,11 +146,10 @@ test('the formatter keeps a table a table, and is a fixed point on one', () => {
     assert.ok(/\n {8}"City Ruins", {1,2}24\n/.test(once), 'a row stays one line, at the block\'s indent');
 });
 
-test('the real NieR screens, where present, read with no diagnostics and their tables expand', () => {
-    const nier = path.join('C:', 'Users', '10678', 'Documents', 'Unreal Projects', '58', 'DevProject', 'DUI', 'UITests', 'NieR', 'NieR_Menu.dui');
-    if (!fs.existsSync(nier)) {
-        return;
-    }
+// Point DREAMUI_NIER_DIR at the NieR test screens' DUI directory (DUI/UITests/NieR in the project that has them).
+const nierDir = process.env.DREAMUI_NIER_DIR;
+test('the real NieR screens read with no diagnostics and their tables expand', { skip: nierDir ? false : 'DREAMUI_NIER_DIR not set' }, () => {
+    const nier = path.join(nierDir!, 'NieR_Menu.dui');
     // Read alone: the styles it borrows from NieR_Common.dui are the index's to resolve (the corpus sweep does that),
     // so DUI3004 is all one file may say about it.
     const structure = buildStructure(fs.readFileSync(nier, 'utf8'));
