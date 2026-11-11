@@ -74,8 +74,6 @@ export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
  *   - DUI3010/3011/3012, which had no raise site in the compiler at all when this set was written
  *     and now arrive as errors that fail the compile. The compiler's message names both nodes and
  *     both ways out, and is worth having beside the mirror's warning;
- *   - DUI2024, which the compiler also raises where the mirror reads nothing as a tag line (a `@tag` in a style block,
- *     or one a branch or a loop holds directly); filtering its copy there would drop a real refusal;
  *   - DUI3018, which the mirror can only say for a class-path alias, or a file the index resolves,
  *     spelt exactly as the symbols dump spells the tag -- the compiler compares FNames and needs no
  *     index;
@@ -83,13 +81,13 @@ export const LOCALLY_RAISED: ReadonlySet<number> = new Set([
  *     only once every import resolved in the index -- the compiler resolves them against its DUI
  *     roots and always knows.
  *
- * The parse-level codes the `use … as` / props / events / if / slot grammar added (2015-2019, 3016,
+ * The parse-level codes the `use … as` / props / events / if / slot / `@tag` grammar added (2015-2019, 2024, 3016,
  * 3017, 3019, 3020, 3022) ARE in it, and so are the `rows` table's (2020, 3023): each is one file's characters, the mirror consumes every one of
  * those productions token for token as FParser does, and says each refusal the compiler says there.
  */
 export const MAILBOX_SUPPRESSED: ReadonlySet<number> = new Set([
     1001, 1002, 1003, 1004, 1005,
-    2002, 2003, 2004, 2006, 2015, 2016, 2017, 2018, 2019, 2020, 2021,
+    2002, 2003, 2004, 2006, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2024,
     3001, 3002, 3004, 3005, 3008, 3014, 3015, 3016, 3017, 3019, 3020, 3022, 3023, 3024,
     4007,
 ]);

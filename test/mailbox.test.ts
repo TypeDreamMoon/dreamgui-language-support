@@ -52,9 +52,8 @@ test('suppression is a subset of what is raised locally, never the other way rou
 
 test('the codes the mirror judges more narrowly than the compiler are NOT filtered', () => {
     // DUI1006 reads the unsaved buffer where the compiler read the file on disk; DUI2013's local
-    // depth budget is spent on blocks only, and DUI2024's compiler copy also covers a `@tag` in a style block or directly
-    // in an `if` or a loop, which the mirror does not read as one. Filtering any of them would throw away a real refusal.
-    for (const code of [1006, 2013, 2024]) {
+    // depth budget is spent on blocks only. Filtering either would throw away a real refusal.
+    for (const code of [1006, 2013]) {
         assert.ok(LOCALLY_RAISED.has(code), `DUI${code} should be raised locally`);
         assert.ok(!MAILBOX_SUPPRESSED.has(code), `DUI${code} must reach Problems from the compiler too`);
     }
@@ -121,7 +120,7 @@ test('a malformed diagnostic inside an entry is dropped, its siblings kept', () 
 });
 
 test('the use … as / props / events / if / slot codes are raised live and their compiler copies filtered', () => {
-    for (const code of [2015, 2016, 2017, 2018, 2019, 3016, 3017, 3019, 3020, 3022]) {
+    for (const code of [2015, 2016, 2017, 2018, 2019, 2024, 3016, 3017, 3019, 3020, 3022]) {
         assert.ok(LOCALLY_RAISED.has(code), `DUI${code} should be raised locally`);
         assert.ok(MAILBOX_SUPPRESSED.has(code), `DUI${code} is one file's characters and should not wear two squiggles`);
     }
