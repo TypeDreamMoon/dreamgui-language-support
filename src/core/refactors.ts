@@ -149,8 +149,8 @@ export function planExtractStyle(built: Built, source: string, selectionStart: n
     if (!owner || owner.kind !== 'node') {
         return { error: '选区不在任何节点体内。' };
     }
-    if (owner.styleName) {
-        return { error: `节点已经穿着样式 '${owner.styleName}',先内联它或换个节点。` };
+    if (owner.styles) {
+        return { error: `节点已经穿着样式 '${owner.styles[0].name}',先内联它或换个节点。` };
     }
 
     const chosen = owner.properties.filter((stmt) => stmt.start < selectionEnd && stmt.end > selectionStart);
@@ -200,8 +200,7 @@ function deleteStatementLine(source: string, stmt: PropertyStmt): RenameEdit {
 
 /** The node whose `: Style` clause covers the offset, or undefined. */
 export function wornStyleAt(built: Built, offset: number): StructNode | undefined {
-    return allNodes(built).find((node) => node.styleName && node.styleNameStart !== undefined
-        && offset >= node.styleNameStart && offset <= node.styleNameStart + node.styleName.length);
+    return allNodes(built).find((node) => node.styles?.some((style) => offset >= style.start && offset <= style.end));
 }
 
 
@@ -250,37 +249,45 @@ function componentText(source: string, component: StructComponent, indent: strin
  *     writers of one object; that merge is the author's to make, so it is refused rather than guessed.
  */
 export function planInlineStyle(built: Built, source: string, node: StructNode): RefactorPlan {
-    if (!node.styleName || node.styleNameStart === undefined) {
+    const worn = node.styles?.[0];
+    if (!worn) {
         return { error: '这个节点没有穿样式。' };
     }
     if (node.bodyStart === undefined || node.bodyEnd === undefined) {
         return { error: '节点没有块,没地方放内联出来的属性。' };
     }
-    if (node.styleName.includes('.')) {
-        return { error: `样式 '${node.styleName}' 来自命名空间库,只能内联本文件声明的样式。` };
+    if (node.styles!.length > 1) {
+        return { error: '节点穿着不止一个样式(`: A : B`),多重样式的合并顺序要照编译器来,暂不支持内联。' };
+    }
+    if (worn.name.includes('.')) {
+        return { error: `样式 '${worn.name}' 来自命名空间库,只能内联本文件声明的样式。` };
     }
 
     // Walk the chain, worn style first. Refuse what the builder refuses.
     const chain: StyleDecl[] = [];
     const visited = new Set<StyleDecl>();
-    let link = built.styles.find((style) => fold(style.name) === fold(node.styleName!));
+    let link = built.styles.find((style) => fold(style.name) === fold(worn.name));
     while (link) {
         if (visited.has(link)) {
-            return { error: `样式 '${node.styleName}' 的继承成环,先修 DUI3015。` };
+            return { error: `样式 '${worn.name}' 的继承成环,先修 DUI3015。` };
         }
         visited.add(link);
         chain.push(link);
-        if (!link.base) {
+        if (link.bases.length === 0) {
             break;
         }
-        const base: StyleDecl | undefined = built.styles.find((style) => fold(style.name) === fold(link!.base!));
+        if (link.bases.length > 1) {
+            return { error: `样式 '${link.name}' 继承了不止一个基(\`: A : B\`),多重继承的合并顺序要照编译器来,暂不支持内联。` };
+        }
+        const baseName = link.bases[0].name;
+        const base: StyleDecl | undefined = built.styles.find((style) => fold(style.name) === fold(baseName));
         if (!base) {
-            return { error: `样式 '${link.name}' 的基 '${link.base}' 本文件没有声明(DUI3004,或由 use 带进来),无法内联整条链。` };
+            return { error: `样式 '${link.name}' 的基 '${baseName}' 本文件没有声明(DUI3004,或由 use 带进来),无法内联整条链。` };
         }
         link = base;
     }
     if (chain.length === 0) {
-        return { error: `样式 '${node.styleName}' 不在本文件里声明(可能由 use 带进来),只能内联本文件声明的样式。` };
+        return { error: `样式 '${worn.name}' 不在本文件里声明(可能由 use 带进来),只能内联本文件声明的样式。` };
     }
 
     // Components first, as the builder applies them; one per class across the chain and the node.
@@ -347,11 +354,11 @@ export function planInlineStyle(built: Built, source: string, node: StructNode):
     }
 
     // Drop ` : Style` -- from the colon (and the space before it) to the name's end.
-    const colon = source.lastIndexOf(':', node.styleNameStart);
+    const colon = source.lastIndexOf(':', worn.start);
     let clauseStart = colon;
     while (clauseStart > 0 && (source[clauseStart - 1] === ' ' || source[clauseStart - 1] === '\t')) {
         clauseStart--;
     }
-    edits.push({ start: clauseStart, end: node.styleNameStart + node.styleName.length, newText: '' });
+    edits.push({ start: clauseStart, end: worn.end, newText: '' });
     return { edits };
 }

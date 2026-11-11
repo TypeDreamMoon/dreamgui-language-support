@@ -694,7 +694,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
             const out = model.outline.map(toSymbol);
             for (const style of model.styles) {
                 const range = document.lineAt(style.line).range;
-                out.push(new vscode.DocumentSymbol(style.name, style.base ? `style : ${style.base}` : 'style',
+                out.push(new vscode.DocumentSymbol(style.name, style.bases.length > 0 ? `style : ${style.bases.join(' : ')}` : 'style',
                     vscode.SymbolKind.Class, range, range));
             }
             if (model.resources.length > 0) {

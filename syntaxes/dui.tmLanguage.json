@@ -239,24 +239,36 @@
         { "include": "#values" }
       ]
     },
+    "style-chain": {
+      "comment": "The colons and names of a style clause: `: A : B`, `: nier.Label : Loud`. Applied inside a capture that holds the whole clause.",
+      "patterns": [
+        { "match": ":", "name": "punctuation.separator.style.dui" },
+        { "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*", "name": "entity.other.inherited-class.style.dui", "captures": { "0": { "patterns": [ { "include": "#qualifier" } ] } } }
+      ]
+    },
+    "inheritance-chain": {
+      "comment": "The colons and names of a style declaration's bases: `style Danger : Button : Loud`.",
+      "patterns": [
+        { "match": ":", "name": "punctuation.separator.inheritance.dui" },
+        { "match": "[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*", "name": "entity.other.inherited-class.style.dui", "captures": { "0": { "patterns": [ { "include": "#qualifier" } ] } } }
+      ]
+    },
     "style-declaration": {
-      "match": "^\\s*(style)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?",
+      "match": "^\\s*(style)\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)(?:\\s*(:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:\\s*:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*))?",
       "captures": {
         "1": { "name": "keyword.control.style.dui" },
         "2": { "name": "entity.name.type.style.dui" },
-        "3": { "name": "punctuation.separator.inheritance.dui" },
-        "4": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] }
+        "3": { "patterns": [ { "include": "#inheritance-chain" } ] }
       }
     },
     "rows-header": {
       "comment": "`rows Type : Style (Column, Column) {` -- a table of instances: the type, the style and the columns once, then one line of values per instance. Only before a type and a column list, as the compiler reads it: `rows = 3` and `rows Grid { }` stay what they were. The rows themselves are values (`#values`), and a row's own block is a node body.",
-      "begin": "(?:^|(?<=[{;]))\\s*(rows)\\s+(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s*(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?\\s*(\\()",
+      "begin": "(?:^|(?<=[{;]))\\s*(rows)\\s+(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s*(:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:\\s*:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*))?\\s*(\\()",
       "beginCaptures": {
         "1": { "name": "keyword.control.rows.dui" },
         "2": { "name": "entity.name.tag.dui", "patterns": [ { "include": "#qualifier" } ] },
-        "3": { "name": "punctuation.separator.style.dui" },
-        "4": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] },
-        "5": { "name": "punctuation.section.parens.begin.dui" }
+        "3": { "patterns": [ { "include": "#style-chain" } ] },
+        "4": { "name": "punctuation.section.parens.begin.dui" }
       },
       "end": "(\\))",
       "endCaptures": { "1": { "name": "punctuation.section.parens.end.dui" } },
@@ -541,7 +553,7 @@
     },
     "node-header": {
       "comment": "`Type Id`, then `(was: Old)` and `: Style` in either order. The type is a tag, a container (`VerticalBox`), an alias (`Row`, `nier.Row`), `@Name`, a registry tag (`Native.Button`) or a path. With no id, a `{` or a style clause must follow (`HorizontalBox {`, `Text : Caption {`) -- a type alone on a line is the DUI2004 it always was. Also after a `{` or `;`, so a one-line body's child (`RectBlock Key : Cap { Text Label : Caption {} }`) is a node too. A path never starts `//` or `/*`: the rule's `\\s*` starts it at the indent, left of where a comment would, so an indented `// The note` would otherwise be a node of type `//` called The.",
-      "match": "(?:^|(?<=[{;]))\\s*(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)|(?=\\s*(?:\\{|:\\s*[A-Za-z_\\u00A0-\\uFFFF])))\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:)\\s*([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*))?\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?",
+      "match": "(?:^|(?<=[{;]))\\s*(/(?![/*])[\\w/.\\u00A0-\\uFFFF]+|@(?!slot\\b)[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*|[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)(?:\\s+([A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)|(?=\\s*(?:\\{|:\\s*[A-Za-z_\\u00A0-\\uFFFF])))\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?\\s*(?:(:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*(?:\\s*:\\s*[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*(?:\\.[A-Za-z_\\u00A0-\\uFFFF][\\w\\u00A0-\\uFFFF]*)*)*))?\\s*(?:(\\()\\s*(was)\\s*(:)\\s*([\\w\\u00A0-\\uFFFF]+)\\s*(\\)))?",
       "captures": {
         "1": { "name": "entity.name.tag.dui", "patterns": [ { "include": "#qualifier" } ] },
         "2": { "name": "entity.name.section.id.dui" },
@@ -550,13 +562,12 @@
         "5": { "name": "punctuation.separator.dui" },
         "6": { "name": "entity.name.section.oldid.dui" },
         "7": { "name": "punctuation.section.parens.end.dui" },
-        "8": { "name": "punctuation.separator.style.dui" },
-        "9": { "name": "entity.other.inherited-class.style.dui", "patterns": [ { "include": "#qualifier" } ] },
-        "10": { "name": "punctuation.section.parens.begin.dui" },
-        "11": { "name": "keyword.control.was.dui" },
-        "12": { "name": "punctuation.separator.dui" },
-        "13": { "name": "entity.name.section.oldid.dui" },
-        "14": { "name": "punctuation.section.parens.end.dui" }
+        "8": { "patterns": [ { "include": "#style-chain" } ] },
+        "9": { "name": "punctuation.section.parens.begin.dui" },
+        "10": { "name": "keyword.control.was.dui" },
+        "11": { "name": "punctuation.separator.dui" },
+        "12": { "name": "entity.name.section.oldid.dui" },
+        "13": { "name": "punctuation.section.parens.end.dui" }
       }
     },
     "resource-ref": {

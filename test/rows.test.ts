@@ -37,9 +37,8 @@ test('a table reads into one unnamed child per line, between its siblings, named
     for (const row of rows) {
         assert.equal(row.kind, 'node');
         assert.equal(row.tag, 'Text');
-        assert.equal(row.styleName, 'Caption');
         assert.equal(row.anonymous, true);
-        assert.equal(row.styleNameStart, undefined, 'the style clause is the header\'s, written once');
+        assert.equal(row.styles, undefined, 'the style clause is the header\'s, written once');
     }
     assert.deepEqual(rows.map((row) => row.rowKey), ['City Ruins', 'Desert Zone', 'Forest Zone', 'Factory']);
     assert.deepEqual(rows.map((row) => row.line), [4, 5, 7, 7]);
@@ -53,7 +52,7 @@ test('a table reads into one unnamed child per line, between its siblings, named
     const table = structure.rowsTables![0];
     assert.equal(table.tag, 'Text');
     assert.equal(TABLE.slice(table.tagStart, table.tagEnd), 'Text');
-    assert.equal(table.styleName, 'Caption');
+    assert.deepEqual(table.styles?.map((style) => style.name), ['Caption']);
     assert.deepEqual(table.columns.map((column) => column.name), ['Text', 'FontSize']);
     assert.ok(structure.scopes.some((scope) => scope.kind === 'rows'));
 });

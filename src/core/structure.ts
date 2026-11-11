@@ -74,11 +74,11 @@ export interface StructNode {
     /** The whole '(was: X)' clause, opening paren to closing paren inclusive. */
     wasStart?: number;
     wasEnd?: number;
-    /** `: Card`, or `: nier.Card` -- a namespaced style keeps its dots, and styleNameStart is its first word. */
-    styleName?: string;
-    styleNameStart?: number;
-    styleNameLine?: number;
-    styleNameColumn?: number;
+    /**
+     * The style clause, every name in it and in order: `: Card`, `: nier.Card`, `: Heading : Glow`. A namespaced name
+     * keeps its dots. Absent when the node wears none.
+     */
+    styles?: StyleRef[];
     components: StructComponent[];
     /**
      * As written, branches included. A branch's own children are the arm's widgets; see `lowered` for the children
@@ -147,16 +147,22 @@ export interface StructComponent {
     properties?: PropertyStmt[];
 }
 
+/** One style name in a clause (`: Heading : nier.Glow`): as written, dots kept, and where its first word is. */
+export interface StyleRef {
+    name: string;
+    line: number;
+    column: number;
+    start: number;
+    end: number;
+}
+
 export interface StyleDecl {
     name: string;
-    /** `style Danger : Card`, or `: nier.Card` -- dots kept, baseStart at the first word. */
-    base?: string;
+    /** `style Danger : Card : Loud`: every base, in order, each as a node's style clause spells it (dots kept). */
+    bases: StyleRef[];
     line: number;
     column: number;
     nameStart: number;
-    baseStart?: number;
-    baseLine?: number;
-    baseColumn?: number;
     bodyStart?: number;
     bodyEnd?: number;
     /** The style's own lines, its `@slot` lines included and flagged. */
@@ -407,10 +413,7 @@ export interface RowsTable {
     tagEnd: number;
     line: number;
     column: number;
-    styleName?: string;
-    styleNameStart?: number;
-    styleNameLine?: number;
-    styleNameColumn?: number;
+    styles?: StyleRef[];
     columns: { name: string; start: number }[];
     bodyStart?: number;
     bodyEnd?: number;
@@ -892,23 +895,19 @@ class Parser {
         const style: StyleDecl = {
             name: nameToken.text,
             line: keyword.line, column: keyword.column, nameStart: nameToken.start,
-            properties: [], components: [],
+            bases: [], properties: [], components: [],
         };
         this.advance();
 
-        if (this.check('colon')) {
-            // `style Danger : Button`, or `: nier.Button` -- a library's, the same way a node's clause takes one.
+        // `style Danger : Button`, `: nier.Button` -- a library's, the same way a node's clause takes one -- and
+        // `: Button : Loud`, as many as are written.
+        while (this.check('colon')) {
             this.advance();
             if (!this.check('identifier')) {
                 this.recover();
                 return;
             }
-            const base = this.parseQualifiedName();
-            style.base = base.name;
-            style.baseStart = base.first.start;
-            style.baseLine = base.first.line;
-            style.baseColumn = base.first.column;
-            this.noteNamespaceReference(base.name, 'style', base.first, base.end);
+            style.bases.push(this.parseStyleRef());
         }
 
         if (!this.check('openBrace')) {
@@ -1544,18 +1543,38 @@ class Parser {
         this.skipPastCloseParen();
     }
 
-    /** `: Card`, or `: nier.Card`. The compiler reports a ':' with no name after it (DUI2001) and goes on. */
+    /**
+     * `: Card`, `: nier.Card`, `: Heading : Glow` -- every ':' that follows is another style of the same clause. The
+     * compiler reports a ':' with no name after it (DUI2001) and goes on.
+     */
     private parseStyleClause(node: StructNode): void {
-        this.advance(); // ':'
-        if (!this.check('identifier')) {
-            return;
+        const styles = this.parseStyleChain();
+        if (styles.length > 0) {
+            node.styles = styles;
         }
+    }
+
+    /** The cursor on a ':' -- the names of `: A : B`, up to the first ':' that has no name after it. */
+    private parseStyleChain(): StyleRef[] {
+        const styles: StyleRef[] = [];
+        while (this.check('colon')) {
+            this.advance(); // ':'
+            if (!this.check('identifier')) {
+                break;
+            }
+            styles.push(this.parseStyleRef());
+        }
+        return styles;
+    }
+
+    /** One style name, the cursor on its first word; a namespaced one is noted for DUI3021. */
+    private parseStyleRef(): StyleRef {
         const name = this.parseQualifiedName();
-        node.styleName = name.name;
-        node.styleNameStart = name.first.start;
-        node.styleNameLine = name.first.line;
-        node.styleNameColumn = name.first.column;
         this.noteNamespaceReference(name.name, 'style', name.first, name.end);
+        return {
+            name: name.name, line: name.first.line, column: name.first.column,
+            start: name.first.start, end: name.end,
+        };
     }
 
     /** `Card` or `nier.Card`, the cursor on the first word; dots joined only with a word after them. */
@@ -1747,7 +1766,7 @@ class Parser {
         while (this.peek(ahead).kind === 'dot' && this.peek(ahead + 1).kind === 'identifier') {
             ahead += 2;
         }
-        if (this.peek(ahead).kind === 'colon') {
+        while (this.peek(ahead).kind === 'colon') {
             ahead++;
             if (this.peek(ahead).kind !== 'identifier') {
                 return false;
@@ -1794,17 +1813,9 @@ class Parser {
             });
             this.noteNamespaceReference(name, 'resource', typeToken, tagEnd);
         }
-        if (this.check('colon')) {
-            this.advance();
-            if (this.check('identifier')) {
-                const first = this.current();
-                const qualified = this.parseQualifiedName();
-                table.styleName = qualified.name;
-                table.styleNameStart = first.start;
-                table.styleNameLine = first.line;
-                table.styleNameColumn = first.column;
-                this.noteNamespaceReference(qualified.name, 'style', first, qualified.end);
-            }
+        const styles = this.parseStyleChain();
+        if (styles.length > 0) {
+            table.styles = styles;
         }
 
         this.advance(); // '('
@@ -1888,7 +1899,6 @@ class Parser {
         const row: StructNode = {
             kind: 'node', tag: table.tag, id: '', anonymous: true,
             line: first.line, column: first.column, start: first.start, tagEnd: first.start,
-            styleName: table.styleName,
             components: [], children: [], properties: [],
         };
         let count = 0;
@@ -1936,6 +1946,11 @@ class Parser {
             row.bodyStart = this.current().start;
             this.parseNodeBody(row, open);
             row.bodyEnd = this.previousStart();
+        }
+        if (table.styles) {
+            // The clause is the header's, written once: the row does not carry its spans, so nothing that walks the
+            // nodes meets it once per row. The chain checks are about what a row wears, and look it up here.
+            this.rowStyles.set(row, table.styles);
         }
         parent.children.push(row);
     }
@@ -3155,24 +3170,20 @@ class Parser {
             visit(this.result.roots[0], 0);
         }
 
-        for (const table of this.result.rowsTables ?? []) {
-            if (table.styleName && table.styleNameStart !== undefined && !table.styleName.includes('.')
-                && !this.findStyle(table.styleName)) {
-                this.error(3004, `'${table.styleName}' names a style this file does not declare`, {
-                    line: table.styleNameLine!, column: table.styleNameColumn!,
-                    start: table.styleNameStart, end: table.styleNameStart + table.styleName.length,
-                });
+        // A namespaced style is the index's to judge: its library's styles are not in this file, and when the
+        // namespace itself is unknown the compiler says that, once, instead (DUI3021). Every name of a clause is
+        // judged on its own.
+        const reportUnknown = (style: StyleRef): void => {
+            if (!style.name.includes('.') && !this.findStyle(style.name)) {
+                this.error(3004, `'${style.name}' names a style this file does not declare`, style);
             }
+        };
+        for (const table of this.result.rowsTables ?? []) {
+            table.styles?.forEach(reportUnknown);
         }
         for (const node of allNodes) {
-            // A namespaced style is the index's to judge: its library's styles are not in this file, and when the
-            // namespace itself is unknown the compiler says that, once, instead (DUI3021).
-            if (node.styleName && node.rowKey === undefined && !node.styleName.includes('.') && !this.findStyle(node.styleName)) {
-                this.error(3004, `'${node.styleName}' names a style this file does not declare`, {
-                    line: node.styleNameLine ?? node.line, column: node.styleNameColumn ?? node.column,
-                    start: node.styleNameStart ?? node.start,
-                    end: (node.styleNameStart ?? node.start) + node.styleName.length,
-                });
+            if (node.rowKey === undefined) {
+                node.styles?.forEach(reportUnknown);
             }
 
             if (!node.wasId) {
@@ -3216,62 +3227,70 @@ class Parser {
     private checkStyleChains(nodes: StructNode[]): void {
         const wornStyles = new Set<string>();
         for (const node of nodes) {
-            if (!node.styleName || node.styleName.includes('.')) {
-                continue;
-            }
-            const style = this.findStyle(node.styleName);
-            if (!style) {
-                continue;
-            }
-            wornStyles.add(foldName(style.name));
-
-            const visited = new Set<StyleDecl>();
-            for (let link: StyleDecl | undefined = style; link;) {
-                if (visited.has(link)) {
-                    this.error(3015,
-                        `style '${style.name}' inherits itself through its bases, so nothing was applied`,
-                        this.idAnchor(node));
-                    break;
+            for (const ref of node.styles ?? this.rowStyles.get(node) ?? []) {
+                const style = ref.name.includes('.') ? undefined : this.findStyle(ref.name);
+                if (!style) {
+                    continue;
                 }
-                visited.add(link);
-                if (!link.base || link.base.includes('.')) {
-                    break;
-                }
-                const base: StyleDecl | undefined = this.findStyle(link.base);
-                if (!base) {
-                    this.reportUnknownBase(link, 'error');
-                    break;
-                }
-                wornStyles.add(foldName(base.name));
-                link = base;
+                // Every base of every style is walked, depth first: a style reaches itself by any of them.
+                const onPath = new Set<StyleDecl>();
+                const done = new Set<StyleDecl>();
+                const walk = (link: StyleDecl): boolean => {
+                    if (onPath.has(link)) {
+                        this.error(3015,
+                            `style '${style.name}' inherits itself through its bases, so nothing was applied`,
+                            this.idAnchor(node));
+                        return true;
+                    }
+                    if (done.has(link)) {
+                        return false;
+                    }
+                    onPath.add(link);
+                    wornStyles.add(foldName(link.name));
+                    for (const base of link.bases) {
+                        if (base.name.includes('.')) {
+                            continue;
+                        }
+                        const next = this.findStyle(base.name);
+                        if (!next) {
+                            this.reportUnknownBase(link, base, 'error');
+                        } else if (walk(next)) {
+                            return true;
+                        }
+                    }
+                    onPath.delete(link);
+                    done.add(link);
+                    return false;
+                };
+                walk(style);
             }
         }
 
         for (const style of this.result.styles) {
-            if (style.base && !style.base.includes('.') && !this.findStyle(style.base)
-                && !wornStyles.has(foldName(style.name))) {
-                this.reportUnknownBase(style, 'warning');
+            if (wornStyles.has(foldName(style.name))) {
+                continue;
+            }
+            for (const base of style.bases) {
+                if (!base.name.includes('.') && !this.findStyle(base.name)) {
+                    this.reportUnknownBase(style, base, 'warning');
+                }
             }
         }
     }
 
-    private readonly unknownBaseReported = new Set<StyleDecl>();
+    private readonly unknownBaseReported = new Set<StyleRef>();
+    private readonly rowStyles = new WeakMap<StructNode, StyleRef[]>();
 
-    private reportUnknownBase(style: StyleDecl, severity: 'error' | 'warning'): void {
-        if (this.unknownBaseReported.has(style)) {
+    private reportUnknownBase(style: StyleDecl, base: StyleRef, severity: 'error' | 'warning'): void {
+        if (this.unknownBaseReported.has(base)) {
             return;
         }
-        this.unknownBaseReported.add(style);
-        const at = {
-            line: style.baseLine ?? style.line, column: style.baseColumn ?? style.column,
-            start: style.baseStart ?? style.nameStart,
-            end: (style.baseStart ?? style.nameStart) + (style.base?.length ?? 0),
-        };
-        const message = `style '${style.name}' inherits '${style.base}', which this file does not declare`;
+        this.unknownBaseReported.add(base);
+        const message = `style '${style.name}' inherits '${base.name}', which this file does not declare`;
         if (severity === 'error') {
-            this.error(3004, message, at);
+            this.error(3004, message, base);
         } else {
-            this.warning(3004, message, at);
+            this.warning(3004, message, base);
         }
     }
 

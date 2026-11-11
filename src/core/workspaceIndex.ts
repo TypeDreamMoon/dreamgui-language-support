@@ -177,11 +177,9 @@ export function summarizeFile(file: string, text: string): FileSummary {
                 line: node.line, column: node.column,
             });
         }
-        if (node.styleName && node.styleNameStart !== undefined) {
+        for (const style of node.styles ?? []) {
             summary.styleUses.push({
-                file, name: node.styleName,
-                start: node.styleNameStart, end: node.styleNameStart + node.styleName.length,
-                line: node.styleNameLine!, column: node.styleNameColumn!,
+                file, name: style.name, start: style.start, end: style.end, line: style.line, column: style.column,
             });
         }
         node.children.forEach(visit);
@@ -202,11 +200,9 @@ export function summarizeFile(file: string, text: string): FileSummary {
 
     // A `rows` table's style clause is written once, in its header, for all its rows.
     for (const table of structure.rowsTables ?? []) {
-        if (table.styleName && table.styleNameStart !== undefined) {
+        for (const style of table.styles ?? []) {
             summary.styleUses.push({
-                file, name: table.styleName,
-                start: table.styleNameStart, end: table.styleNameStart + table.styleName.length,
-                line: table.styleNameLine!, column: table.styleNameColumn!,
+                file, name: style.name, start: style.start, end: style.end, line: style.line, column: style.column,
             });
         }
     }
@@ -216,11 +212,9 @@ export function summarizeFile(file: string, text: string): FileSummary {
             start: style.nameStart, end: style.nameStart + style.name.length,
             line: style.line, column: style.column,
         });
-        if (style.base && style.baseStart !== undefined) {
+        for (const base of style.bases) {
             summary.styleUses.push({
-                file, name: style.base,
-                start: style.baseStart, end: style.baseStart + style.base.length,
-                line: style.baseLine!, column: style.baseColumn!,
+                file, name: base.name, start: base.start, end: base.end, line: base.line, column: base.column,
             });
         }
     }

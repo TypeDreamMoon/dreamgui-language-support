@@ -77,7 +77,7 @@ test('extracting selected property lines makes a style the node then wears', () 
     assert.deepEqual(rebuilt.styles.map((s) => s.name), ['Heading']);
     assert.deepEqual(rebuilt.styles[0].properties.map((p) => p.path), ['FontSize', 'HAlign']);
     const title = rebuilt.roots[0].children[0];
-    assert.equal(title.styleName, 'Heading');
+    assert.deepEqual(title.styles?.map((style) => style.name), ['Heading']);
     // The moved lines left the node; the others stayed.
     assert.deepEqual(title.properties.map((p) => p.path), ['SizeRule', 'Text']);
 });
@@ -107,7 +107,7 @@ test('inlining lands the chain base-first-derived-overriding, minus what the nod
     const rebuilt = buildStructure(result);
     assert.deepEqual(rebuilt.diagnostics, []);
     const title = rebuilt.roots[0].children[0];
-    assert.equal(title.styleName, undefined);
+    assert.equal(title.styles, undefined);
     // FontSize comes from Danger (22, overriding Label's 18); HAlign stays the node's own Right.
     const props = new Map(title.properties.map((p) => [p.path, result.slice(p.valueStart!, p.valueEnd!)]));
     assert.equal(props.get('FontSize'), '22');
@@ -125,7 +125,7 @@ test('inlining into a single-line block opens the block up', () => {
     const rebuilt = buildStructure(result);
     assert.deepEqual(rebuilt.diagnostics, []);
     assert.equal(rebuilt.roots[0].children[0].properties.length, 1);
-    assert.equal(rebuilt.roots[0].children[0].styleName, undefined);
+    assert.equal(rebuilt.roots[0].children[0].styles, undefined);
 });
 
 test('inlining a broken chain is refused with the code to fix first', () => {
@@ -148,7 +148,7 @@ test('extracting a style from an unnamed node puts the clause straight after its
     assert.deepEqual(rebuilt.diagnostics, []);
     const box = rebuilt.roots[0].children[0];
     assert.ok(box.anonymous);
-    assert.equal(box.styleName, 'Strip');
+    assert.deepEqual(box.styles?.map((style) => style.name), ['Strip']);
     assert.deepEqual(rebuilt.styles[0].properties.map((p) => p.path), ['Spacing', 'Padding']);
 });
 
@@ -169,7 +169,7 @@ test('inlining a style lands its components, widget lines and slot lines, each a
     const rebuilt = buildStructure(result);
     assert.deepEqual(rebuilt.diagnostics, []);
     const left = rebuilt.roots[0].children[0];
-    assert.equal(left.styleName, undefined);
+    assert.equal(left.styles, undefined);
     assert.deepEqual(left.components.map((c) => c.name), ['VerticalBox']);
     assert.ok(result.includes('+ VerticalBox { Spacing = 8 }'));
     // The widget line stays a widget line; the slot lines stay slot lines.

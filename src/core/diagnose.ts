@@ -163,7 +163,7 @@ export function judgeDocument(input: JudgeInput): CoreDiagnostic[] {
         }
         // A namespaced style the namespace's library does not have. A node's clause only: a style's base is walked
         // by the builder from the nodes that wear it, which is the structural layer's rule and stays its own.
-        const baseStarts = new Set(structure.styles.map((style) => style.baseStart));
+        const baseStarts = new Set(structure.styles.flatMap((style) => style.bases.map((base) => base.start)));
         for (const ref of namespaceRefs) {
             if (ref.kind !== 'style' || unknownNamespaceAt.has(ref.start) || baseStarts.has(ref.start)
                 || importedStyles.has(fold(ref.name))) {

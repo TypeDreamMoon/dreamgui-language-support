@@ -676,3 +676,34 @@ test('a rows table: the header keyword, type, style and columns; the rows are va
     assertNoScope(lines, 5, 'rows', 'keyword.control.rows.dui');
     assertNoScope(lines, 6, 'rows', 'keyword.control.rows.dui');
 });
+
+test('a clause of several styles: every name is a style, every colon a separator, a was clause may follow', async () => {
+    const lines = await tokenize([
+        '    Text Title : Heading : ui.Glow { }',
+        '    Text : Heading : Glow {',
+        '    Text Title : Heading : Glow (was: Old) { }',
+        'style Danger : Button : ui.Loud {',
+        '    rows Row : ListRow : Dense (Label, Value) {',
+        '    slot Rows default : RowList : Dense {',
+    ]);
+    assertScope(lines, 0, 'Title', 'entity.name.section.id.dui');
+    assertScope(lines, 0, 'Heading', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 0, 'ui', 'entity.name.namespace.qualifier.dui');
+    assertScope(lines, 0, 'Glow', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 0, ':', 'punctuation.separator.style.dui', 1);
+    assertScope(lines, 1, 'Heading', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 1, 'Glow', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 2, 'Glow', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 2, 'was', 'keyword.control.was.dui');
+    assertScope(lines, 2, 'Old', 'entity.name.section.oldid.dui');
+    assertScope(lines, 3, 'Danger', 'entity.name.type.style.dui');
+    assertScope(lines, 3, 'Button', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 3, 'Loud', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 3, 'ui', 'entity.name.namespace.qualifier.dui');
+    assertScope(lines, 3, ':', 'punctuation.separator.inheritance.dui', 1);
+    assertScope(lines, 4, 'ListRow', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 4, 'Dense', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 4, 'Label', 'variable.other.property.dui');
+    assertScope(lines, 5, 'RowList', 'entity.other.inherited-class.style.dui');
+    assertScope(lines, 5, 'Dense', 'entity.other.inherited-class.style.dui');
+});

@@ -489,8 +489,9 @@ export function definitionAt(index: WorkspaceIndex | undefined, file: string, st
             // Nothing to go to as a component: `@Row` still names its resource entry, below.
         }
         // The style clause.
-        if (node.styleName && within(offset, node.styleNameStart, node.styleName.length)) {
-            return borrowedDefinition(index, file, structure, 'style', node.styleName, node.styleNameStart!, offset);
+        const wornStyle = node.styles?.find((style) => within(offset, style.start, style.name.length));
+        if (wornStyle) {
+            return borrowedDefinition(index, file, structure, 'style', wornStyle.name, wornStyle.start, offset);
         }
         // A slot fill names the component's slot.
         if (node.kind === 'namedSlot' && node.fillsSlot && within(offset, node.idStart, node.id.length) && index) {
@@ -519,8 +520,16 @@ export function definitionAt(index: WorkspaceIndex | undefined, file: string, st
     }
 
     for (const style of structure.styles) {
-        if (style.base && within(offset, style.baseStart, style.base.length)) {
-            return borrowedDefinition(index, file, structure, 'style', style.base, style.baseStart!, offset);
+        const base = style.bases.find((entry) => within(offset, entry.start, entry.name.length));
+        if (base) {
+            return borrowedDefinition(index, file, structure, 'style', base.name, base.start, offset);
+        }
+    }
+    // A `rows` header's clause: written once, for all its rows.
+    for (const table of structure.rowsTables ?? []) {
+        const wornStyle = table.styles?.find((style) => within(offset, style.start, style.name.length));
+        if (wornStyle) {
+            return borrowedDefinition(index, file, structure, 'style', wornStyle.name, wornStyle.start, offset);
         }
     }
 
@@ -630,8 +639,9 @@ export function hoverAt(index: WorkspaceIndex | undefined, file: string, structu
             }
             return undefined; // a tag: the symbols dump's hover answers, with the anonymous note added there
         }
-        if (node.styleName && within(offset, node.styleNameStart, node.styleName.length) && index) {
-            return borrowedHover(index, file, 'style', node.styleName, node.styleNameStart!, offset);
+        const wornStyle = node.styles?.find((style) => within(offset, style.start, style.name.length));
+        if (wornStyle && index) {
+            return borrowedHover(index, file, 'style', wornStyle.name, wornStyle.start, offset);
         }
         if (node.kind === 'node' && index) {
             for (const stmt of node.properties) {
@@ -659,8 +669,15 @@ export function hoverAt(index: WorkspaceIndex | undefined, file: string, structu
     }
 
     for (const style of structure.styles) {
-        if (style.base && within(offset, style.baseStart, style.base.length) && index) {
-            return borrowedHover(index, file, 'style', style.base, style.baseStart!, offset);
+        const base = style.bases.find((entry) => within(offset, entry.start, entry.name.length));
+        if (base && index) {
+            return borrowedHover(index, file, 'style', base.name, base.start, offset);
+        }
+    }
+    for (const table of structure.rowsTables ?? []) {
+        const wornStyle = table.styles?.find((style) => within(offset, style.start, style.name.length));
+        if (wornStyle && index) {
+            return borrowedHover(index, file, 'style', wornStyle.name, wornStyle.start, offset);
         }
     }
     for (const ref of structure.resourceRefs) {

@@ -452,8 +452,8 @@ function statementShape(text: string): {
         }
     };
     for (const table of structure.rowsTables ?? []) {
-        rowsParenAfter.add(table.styleName && table.styleNameStart !== undefined
-            ? table.styleNameStart + table.styleName.length : table.tagEnd);
+        const lastStyle = table.styles?.[table.styles.length - 1];
+        rowsParenAfter.add(lastStyle ? lastStyle.end : table.tagEnd);
     }
     const visit = (node: StructNode): void => {
         addAll(node.properties);

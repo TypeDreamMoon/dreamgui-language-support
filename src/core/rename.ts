@@ -170,23 +170,23 @@ export function renameTargetAt(structure: StructureResult, offset: number): Rena
         if (within(offset, style.nameStart, style.name.length)) {
             return { kind: 'style', name: style.name, start: style.nameStart, end: style.nameStart + style.name.length };
         }
-        if (style.base && style.baseStart !== undefined && within(offset, style.baseStart, style.base.length)) {
-            if (style.base.includes('.')) {
-                return aliasHeadAt(structure, style.base, style.baseStart, offset);
+        const base = style.bases.find((entry) => within(offset, entry.start, entry.name.length));
+        if (base) {
+            if (base.name.includes('.')) {
+                return aliasHeadAt(structure, base.name, base.start, offset);
             }
-            return { kind: 'style', name: style.base, start: style.baseStart, end: style.baseStart + style.base.length };
+            return { kind: 'style', name: base.name, start: base.start, end: base.start + base.name.length };
         }
     }
-    for (const node of nodes) {
-        if (node.styleName && node.styleNameStart !== undefined
-            && within(offset, node.styleNameStart, node.styleName.length)) {
-            if (node.styleName.includes('.')) {
-                return aliasHeadAt(structure, node.styleName, node.styleNameStart, offset);
+    // A `rows` table's clause is written once, in its header; its row nodes carry none.
+    const clauses = [...nodes.map((node) => node.styles), ...(structure.rowsTables ?? []).map((table) => table.styles)];
+    for (const styles of clauses) {
+        const worn = styles?.find((entry) => within(offset, entry.start, entry.name.length));
+        if (worn) {
+            if (worn.name.includes('.')) {
+                return aliasHeadAt(structure, worn.name, worn.start, offset);
             }
-            return {
-                kind: 'style', name: node.styleName,
-                start: node.styleNameStart, end: node.styleNameStart + node.styleName.length,
-            };
+            return { kind: 'style', name: worn.name, start: worn.start, end: worn.start + worn.name.length };
         }
     }
     for (const resource of structure.resources) {
@@ -361,15 +361,18 @@ export function planRename(structure: StructureResult, target: RenameTarget, new
             if (fold(style.name) === wanted) {
                 edits.push({ start: style.nameStart, end: style.nameStart + style.name.length, newText: newName });
             }
-            if (style.base && style.baseStart !== undefined && fold(style.base) === wanted) {
-                edits.push({ start: style.baseStart, end: style.baseStart + style.base.length, newText: newName });
+            for (const base of style.bases) {
+                if (fold(base.name) === wanted) {
+                    edits.push({ start: base.start, end: base.start + base.name.length, newText: newName });
+                }
             }
         }
-        for (const node of nodes) {
-            if (node.styleName && node.styleNameStart !== undefined && fold(node.styleName) === wanted) {
-                edits.push({
-                    start: node.styleNameStart, end: node.styleNameStart + node.styleName.length, newText: newName,
-                });
+        const clauses = [...nodes.map((node) => node.styles), ...(structure.rowsTables ?? []).map((table) => table.styles)];
+        for (const styles of clauses) {
+            for (const worn of styles ?? []) {
+                if (fold(worn.name) === wanted) {
+                    edits.push({ start: worn.start, end: worn.start + worn.name.length, newText: newName });
+                }
             }
         }
         return { edits, localizationKeysChange: false };
@@ -433,10 +436,13 @@ function planAliasRename(structure: StructureResult, nodes: StructNode[], target
                 renameHead(node.tag, node.start);
             }
         }
-        renameHead(node.styleName, node.styleNameStart);
+        node.styles?.forEach((worn) => renameHead(worn.name, worn.start));
+    }
+    for (const table of structure.rowsTables ?? []) {
+        table.styles?.forEach((worn) => renameHead(worn.name, worn.start));
     }
     for (const style of structure.styles) {
-        renameHead(style.base, style.baseStart);
+        style.bases.forEach((base) => renameHead(base.name, base.start));
     }
     for (const ref of structure.resourceRefs) {
         renameHead(ref.name, ref.start + 1);

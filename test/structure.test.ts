@@ -293,10 +293,10 @@ test('the skeleton carries the tree, styles, resources and refs', () => {
     assert.deepEqual(root.components.map((c) => c.name), ['Overlay']);
     assert.deepEqual(root.children.map((c) => `${c.kind}:${c.id}`),
         ['node:Title', 'namedSlot:Footer', 'loop:Row']);
-    assert.equal(root.children[0].styleName, 'Label');
+    assert.deepEqual(root.children[0].styles?.map((style) => style.name), ['Label']);
     assert.equal(root.children[2].children[0].id, 'RowLabel');
 
-    assert.deepEqual(built.styles.map((s) => `${s.name}${s.base ? ':' + s.base : ''}`), ['Label', 'Danger:Label']);
+    assert.deepEqual(built.styles.map((s) => `${s.name}${s.bases.length > 0 ? ':' + s.bases.map((base) => base.name).join(':') : ''}`), ['Label', 'Danger:Label']);
     assert.deepEqual(built.resources.map((r) => `${r.type} ${r.name} = ${r.valueText}`),
         ['Color Accent = #FF6600', 'Number Gap = 8']);
     assert.deepEqual(built.resourceRefs.map((r) => r.name), ['Accent']);
@@ -574,7 +574,7 @@ test('an unnamed node gets the id the compiler makes: parent, type, count, bumpe
     assert.equal(root.children[4].anonymous, undefined);
     // Located at the type -- the '@' of a resource type.
     assert.deepEqual([root.children[2].line, root.children[2].column, root.children[2].tag], [8, 5, '@Row']);
-    assert.equal(root.children[0].children[1].styleName, 'Caption');
+    assert.deepEqual(root.children[0].children[1].styles?.map((style) => style.name), ['Caption']);
 });
 
 test('an unnamed root is named under Root, and its children under it', () => {
@@ -780,7 +780,7 @@ test('slots: a declaration with a layout and a default, a fill of a component\'s
     // Two hosts filling their component's Detail and a widget called Detail besides: none is a duplicate id.
     assert.deepEqual(built.diagnostics, []);
     const [, rows, footer, page2, page3] = built.roots[0].children;
-    assert.deepEqual([rows.kind, rows.defaultSlot, rows.fillsSlot, rows.styleName, rows.components.length, rows.properties.length],
+    assert.deepEqual([rows.kind, rows.defaultSlot, rows.fillsSlot, rows.styles?.map((style) => style.name).join(':'), rows.components.length, rows.properties.length],
         ['namedSlot', true, undefined, 'RowList', 1, 2]);
     assert.deepEqual([footer.defaultSlot, footer.fillsSlot], [undefined, undefined]);
     assert.deepEqual([page2.children[0].fillsSlot, page2.children[0].children[0].id], [true, 'Note']);
@@ -937,7 +937,7 @@ test('a namespaced resource keeps its dots, and a node typed by a resource is a 
     assert.deepEqual(built.diagnostics, []);
     assert.deepEqual(built.resourceRefs.map((r) => `${r.name}${r.nodeType ? ' (type)' : ''}`), ['nier.Ink', 'nier.Row (type)']);
     assert.deepEqual(built.namespaceRefs?.map((r) => `${r.kind}:${r.name}`), ['style:nier.Card', 'resource:nier.Ink', 'resource:nier.Row']);
-    assert.equal(built.roots[0].styleName, 'nier.Card');
+    assert.deepEqual(built.roots[0].styles?.map((style) => style.name), ['nier.Card']);
 });
 
 test('the kit fixtures say nothing a single file can settle but the imported styles', () => {

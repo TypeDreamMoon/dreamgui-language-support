@@ -31,7 +31,7 @@ export interface ResourceEntry {
 
 export interface StyleEntry {
     name: string;
-    base?: string;
+    bases: string[];
     line: number;
     nameStart: number;
 }
@@ -109,7 +109,7 @@ export function buildModel(document: vscode.TextDocument): DocModel {
             line: entry.line - 1, nameStart: entry.column - 1,
         })),
         styles: structure.styles.map((style) => ({
-            name: style.name, base: style.base, line: style.line - 1,
+            name: style.name, bases: style.bases.map((base) => base.name), line: style.line - 1,
             nameStart: document.positionAt(style.nameStart).character,
         })),
         resourceRefs: structure.resourceRefs.map((ref) => ({

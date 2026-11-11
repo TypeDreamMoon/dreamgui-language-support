@@ -67,9 +67,9 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
         if (node.kind === 'node') {
             noteHead(node.tag);
         }
-        noteHead(node.styleName);
+        node.styles?.forEach((style) => noteHead(style.name));
     }
-    structure.styles.forEach((style) => noteHead(style.base));
+    structure.styles.forEach((style) => style.bases.forEach((base) => noteHead(base.name)));
     structure.resourceRefs.forEach((ref) => noteHead(ref.name));
 
     // What the workspace knows, and what the text shows: a component alias is never written `Row.X`, so an own alias
@@ -140,8 +140,10 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
                 push(node.start, end - node.start, 'type');
             }
         }
-        if (node.styleName && !pushQualified(node.styleName, node.styleNameStart, 'class')) {
-            push(node.styleNameStart, node.styleName.length, 'class');
+        for (const style of node.styles ?? []) {
+            if (!pushQualified(style.name, style.start, 'class')) {
+                push(style.start, style.name.length, 'class');
+            }
         }
         for (const component of node.components) {
             push(component.start, component.name.length, 'type');
@@ -163,8 +165,10 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
         } else if (aliases.has(fold(table.tag))) {
             push(table.tagStart, table.tagEnd - table.tagStart, 'type');
         }
-        if (table.styleName && !pushQualified(table.styleName, table.styleNameStart, 'class')) {
-            push(table.styleNameStart, table.styleName.length, 'class');
+        for (const style of table.styles ?? []) {
+            if (!pushQualified(style.name, style.start, 'class')) {
+                push(style.start, style.name.length, 'class');
+            }
         }
         for (const column of table.columns) {
             // A column is the property every row writes.
@@ -174,8 +178,10 @@ export function collectSemanticSpans(structure: StructureResult, context: Semant
 
     for (const style of structure.styles) {
         push(style.nameStart, style.name.length, 'class', ['declaration']);
-        if (style.base && !pushQualified(style.base, style.baseStart, 'class')) {
-            push(style.baseStart, style.base.length, 'class');
+        for (const base of style.bases) {
+            if (!pushQualified(base.name, base.start, 'class')) {
+                push(base.start, base.name.length, 'class');
+            }
         }
         for (const component of style.components ?? []) {
             push(component.start, component.name.length, 'type');
