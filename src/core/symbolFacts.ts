@@ -174,6 +174,22 @@ function normalizeViewModels(raw: unknown): Record<string, ViewModelClass> {
 }
 
 /** The node types the dump lists, with their kind: what completion offers where a node's type goes. */
+/**
+ * What `@slot ` may name: the panel slot's properties the dump lists, and `Size`, the front end's own shorthand for
+ * MinDesiredSize and MaxDesiredSize taken together -- `@slot Size = (120, 48)`. A dump that lists a property of that
+ * name itself keeps its own.
+ */
+export function slotPropertyOffers(listed: readonly PropertyInfo[] | undefined): PropertyInfo[] {
+    const offers = [...(listed ?? [])];
+    if (!offers.some((info) => info.name.toLowerCase() === 'size')) {
+        offers.push({
+            name: 'Size', type: 'Vector2',
+            tooltip: 'MinDesiredSize and MaxDesiredSize, given the same value: `@slot Size = (120, 48)`.',
+        });
+    }
+    return offers;
+}
+
 export function nodeTypeNames(data: SymbolData | undefined): { name: string; kind: TagKind }[] {
     if (!data) {
         // No dump at all: the containers are still the language's, and offering them costs nothing.

@@ -17,7 +17,7 @@ import {
     borrowableNames, namespacesVisibleFrom, namespaceMembers, componentFacts, ComponentFacts, hoverAt,
     anonymousNodeAt, propSignature, eventSignature, baseName,
 } from './core/componentIntel';
-import { tailsAfter, ViewModelMember } from './core/symbolFacts';
+import { tailsAfter, slotPropertyOffers, ViewModelMember } from './core/symbolFacts';
 import { memberRunAt, viewModelClassNames, viewModelMembersAt } from './core/viewModelIntel';
 import { PROP_TYPES, RESOURCE_TYPES, TOP_LEVEL_KEYWORDS } from './core/vocabulary';
 
@@ -302,7 +302,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                 }
 
                 case 'slotPropertyName': {
-                    for (const info of symbols?.slotProperties ?? []) {
+                    for (const info of slotPropertyOffers(symbols?.slotProperties)) {
                         items.push(propertyItem(info));
                     }
                     return items;
@@ -498,7 +498,7 @@ export function registerFeatures(context: vscode.ExtensionContext, store: Symbol
                     return items;
                 }
                 case 'slotLines': {
-                    for (const info of symbols?.slotProperties ?? []) {
+                    for (const info of slotPropertyOffers(symbols?.slotProperties)) {
                         items.push(propertyItem(info));
                     }
                     return items;
