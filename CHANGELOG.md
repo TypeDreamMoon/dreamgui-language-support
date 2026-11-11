@@ -8,7 +8,8 @@ Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles.
   child node of type `@tag` (which used to bring DUI2004 and friends). The directive and the names are coloured, and
   `tag` completes after an `@` in a node block. `@tag X { }` and `@tag X : Style` are still the old resource-typed
   node. A line of any other shape (no name, a number, two names with no comma, a trailing comma) is **DUI2024**, at
-  the `@`. A `@tag` in a style block or directly in an `if` or a loop is left to the compiler.
+  the `@`, worded for what was found; so is a `@tag` in a `style` block or directly in a `for` / `each` body, and one
+  directly in an `if` arm is DUI2018. A slot declaration may hold tags; a slot that fills may not (DUI2019).
 - **`@slot Size = (w, h)`**, the shorthand for MinDesiredSize and MaxDesiredSize with one value, is offered by
   `@slot ` completion (with the explanation) and is never flagged.
 - **A map's first entry may be a bare value** -- `{ "灯", Tag: Lamp }`, the struct's main field -- beside
