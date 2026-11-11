@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 — 2026-11-11
 
 Follows DreamGUI's translator annotations and its DreamLoc checks.
 
