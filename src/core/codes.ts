@@ -161,7 +161,7 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     2019: {
         title: 'slot 行的形状不对',
-        explain: '`slot` 有两种用法,由块里写了什么来区分。**声明**(组件自己的文件里):可以带 `default`、样式和 `(was: …)`,块里写组件、属性和 `@slot` 行来布置这个洞,不写 widget——洞里放什么是宿主的事。**填充**(宿主里、组件实例内部):块里只写 widget。两样都写的块既不是声明也不是填充,被拒绝而不是猜。`default` 写了两次,或在填充上写 `default`、样式或改名(这些属于槽的声明处),也是这一条。',
+        explain: '`slot` 有两种用法,由块里写了什么来区分。**声明**(组件自己的文件里):可以带 `default`、样式和 `(was: …)`,块里写组件、属性、`@slot` 行和 `@tag` 行来布置这个洞,不写 widget——洞里放什么是宿主的事。**填充**(宿主里、组件实例内部):块里只写 widget。两样都写的块既不是声明也不是填充,被拒绝而不是猜。`default` 写了两次,或在填充上写 `default`、样式或改名(这些属于槽的声明处),也是这一条。',
         fix: '声明里不放 widget,填充里只放 widget;`default`、样式与 `(was:)` 写到组件文件里的声明上。',
     },
     2022: {
@@ -176,7 +176,7 @@ export const CODE_EXPLANATIONS: Record<number, CodeExplanation> = {
     },
     2024: {
         title: '@tag 行的形状不对',
-        explain: '`@tag` 写在 widget 节点的块里,给这个节点贴上一个或多个标签:`@tag Trim`、`@tag Glow, UI.Accent`。名字是标识符,可以带点(`UI.Accent`),也可以是中文,多个名字之间用逗号隔开,写完就是语句的结尾。`@tag` 后面什么都没有、跟的是数字或字符串、两个名字之间没有逗号、末尾多一个逗号,都落在这里。`@tag Trim { … }`、`@tag Trim : 样式` 和 `@tag { … }` 不是标签行,仍是类型由名为 tag 的资源(`@tag`)决定的节点,不受这条约束。',
+        explain: '`@tag` 写在 widget 节点的块里,给这个节点贴上一个或多个标签:`@tag Trim`、`@tag Glow, UI.Accent`。名字是标识符,可以带点(`UI.Accent`),也可以是中文,多个名字之间用逗号隔开,写完就是语句的结尾。`@tag` 后面什么都没有、跟的是数字或字符串、两个名字之间没有逗号、末尾多一个逗号,都落在这里。`@tag Trim { … }`、`@tag Trim : 样式` 和 `@tag { … }` 不是标签行,仍是类型由名为 tag 的资源(`@tag`)决定的节点,不受这条约束。标签贴的是 widget:写在 `style` 块里(样式不是由固定的一组 widget 穿着的)、或直接写在 `for` / `each` 的块里(循环自己不是 widget,贴到它重复的那个 widget 上)也落在这里。',
         fix: '写成 `@tag Trim` 或 `@tag Trim, Glow`:名字用逗号隔开,去掉多余的逗号、数字和字符串。',
     },
     2021: {

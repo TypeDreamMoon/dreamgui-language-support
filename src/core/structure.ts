@@ -158,13 +158,14 @@ export interface StyleRef {
     end: number;
 }
 
-/** One name of a `@tag Trim, UI.Accent` line: as written, dots kept. */
+/** One name of a `@tag Trim, UI.Accent` line: as written, dots kept. `at` is the line's '@', where its diagnostics go. */
 export interface TagRef {
     name: string;
     line: number;
     column: number;
     start: number;
     end: number;
+    at: { line: number; column: number; start: number; end: number };
 }
 
 export interface StyleDecl {
@@ -969,6 +970,12 @@ class Parser {
                     this.parseComponent(style.components);
                 } else if (this.isFillShorthand()) {
                     this.parseFillShorthand(style.properties);
+                } else if (this.isTagLine()) {
+                    // A tag names widgets for the code that looks them up, and a style is not worn by a fixed set of
+                    // them. The line is read by the usual rules first, so a malformed one says that as well.
+                    const at = this.current();
+                    this.parseTagLine([]);
+                    this.error(2024, `style '${style.name}' cannot carry '@tag': tag the widgets themselves`, at);
                 } else if (this.check('at') && this.peek(1).kind === 'identifier' && this.peek(1).text === 'slot') {
                     this.parseSlotLine(style.properties);
                 } else if (this.looksLikeProperty()) {
@@ -1685,7 +1692,8 @@ class Parser {
                 return;
             }
             if (this.isTagLine()) {
-                this.parseTagLine(node);
+                node.tags ??= [];
+                this.parseTagLine(node.tags);
                 return;
             }
             if (this.peek(1).kind === 'identifier' && foldName(this.peek(1).text) !== 'slot') {
@@ -2644,39 +2652,42 @@ class Parser {
     }
 
     /**
-     * One or more names, dotted or not, separated by commas, and then the end of the statement. The names go to the
-     * node when it is a widget (or a slot); a branch and a loop hold no widget of their own, so what is written
-     * there is read and let go -- the compiler refuses it, and says so through the mailbox.
+     * ParseTagLine: one or more names, dotted or not, separated by commas, and then the end of the statement. The names
+     * read before a mistake are kept, as the compiler keeps them; the mistake is DUI2024 at the '@', worded for what was
+     * found. Where the line may NOT stand -- a style, a loop, an 'if' arm -- is judged by the one holding it, from the
+     * names this leaves behind.
      */
-    private parseTagLine(node: StructNode): void {
+    private parseTagLine(out: TagRef[]): void {
         const at = this.current();
         this.advance(); // '@'
         this.advance(); // 'tag'
-        const tags: TagRef[] = [];
-        let wellFormed = true;
+        const refuse = (message: string): void => {
+            this.error(2024, message, at);
+            this.recover();
+        };
+        if (this.atStatementEnd()) {
+            refuse("'@tag' takes one or more names separated by commas, as in '@tag Trim, Glow'");
+            return;
+        }
         for (;;) {
             if (!this.check('identifier')) {
-                wellFormed = false;
-                break;
+                refuse(`expected a tag name, found '${this.describeCurrent()}': a tag is a name, as in '@tag Trim'`);
+                return;
             }
             const first = this.current();
             const name = this.parseQualifiedName();
-            tags.push({ name: name.name, line: first.line, column: first.column, start: first.start, end: name.end });
-            if (!this.check('comma')) {
-                break;
+            out.push({
+                name: name.name, line: first.line, column: first.column, start: first.start, end: name.end,
+                at: { line: at.line, column: at.column, start: at.start, end: at.end },
+            });
+            if (this.atStatementEnd()) {
+                return;
             }
-            this.advance();
-        }
-        if (wellFormed && !this.atStatementEnd()) {
-            wellFormed = false;
-        }
-        if (!wellFormed) {
-            this.error(2024, "'@tag' takes one or more names separated by commas, as in '@tag Trim, Glow'", at);
-            this.recover();
-            return;
-        }
-        if (node.kind === 'node' || node.kind === 'namedSlot') {
-            node.tags = [...(node.tags ?? []), ...tags];
+            if (!this.check('comma')) {
+                refuse(`expected ',' or the end of the line after tag '${name.name}', found '${this.describeCurrent()}'`);
+                return;
+            }
+            this.advance(); // ','
         }
     }
 
@@ -2774,10 +2785,10 @@ class Parser {
             // Read whole first, and judged by which half of the node grammar it used -- with an `if`'s widgets counted
             // where the compiler lowers them, among the slot's own children.
             const widgets = this.lowered(slot);
-            const declares = slot.components.length > 0 || slot.properties.length > 0;
+            const declares = slot.components.length > 0 || slot.properties.length > 0 || (slot.tags?.length ?? 0) > 0;
             if (widgets.length > 0 && declares) {
                 this.error(2019,
-                    `slot '${slot.id}' both declares (components, properties, '@slot' lines) and fills (widgets); a declaration holds no widgets and a fill holds nothing else`,
+                    `slot '${slot.id}' both declares (components, properties, '@slot' and '@tag' lines) and fills (widgets); a declaration holds no widgets and a fill holds nothing else`,
                     this.headerAnchor(widgets[0]));
             } else if (widgets.length > 0) {
                 slot.fillsSlot = true;
@@ -2876,6 +2887,12 @@ class Parser {
         this.result.scopes.push({
             kind: 'loop', name: loop.tag, id: loop.id, bodyStart: loop.bodyStart, bodyEnd: loop.bodyEnd,
         });
+        // A loop makes no widget of its own to carry a tag; the widget it repeats does, and every copy keeps it.
+        for (const tag of loop.tags ?? []) {
+            this.error(2024,
+                `'@tag ${tag.name}' tags a widget, and a loop is not one: put it on the widget the loop repeats`, tag.at);
+        }
+        loop.tags = undefined;
         parent.children.push(loop);
     }
 
@@ -2989,6 +3006,11 @@ class Parser {
                 `'+ ${component.name}' attaches to a widget, and an 'if' block holds widgets: put it on a widget inside the block`,
                 plus ?? { line: component.line, column: component.column, start: component.start, end: component.start + component.name.length });
         }
+        for (const tag of branch.tags ?? []) {
+            this.error(2018,
+                `'@tag ${tag.name}' tags a widget, and an 'if' block holds widgets: put it on a widget inside the block`, tag.at);
+        }
+        branch.tags = undefined;
         for (const child of branch.children) {
             if (child.kind === 'node') {
                 this.checkBranchShown(child);

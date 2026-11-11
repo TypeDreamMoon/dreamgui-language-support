@@ -89,10 +89,20 @@ test('`tag` is a keyword only right after the @, and only in lower case', () => 
     assert.deepEqual(codes(wrap('Text tag { Tag = 1 }')), []);
 });
 
-test('DUI2024 at the @, for every shape that is neither a tag line nor a node', () => {
-    const shapes: string[] = ['@tag', '@tag 5', '@tag "Trim"', '@tag Trim Glow', '@tag Trim,', '@tag Trim, , Glow', '@tag , Trim',
-        '@tag UI.', '@tag Trim = 3', '@tag (Trim)'];
-    for (const shape of shapes) {
+test('DUI2024 at the @, worded for what was found, for every shape that is neither a tag line nor a node', () => {
+    const shapes: [string, string, string[]][] = [
+        ['@tag', "'@tag' takes one or more names separated by commas, as in '@tag Trim, Glow'", []],
+        ['@tag 5', "expected a tag name, found '5': a tag is a name, as in '@tag Trim'", []],
+        ['@tag "Trim"', "expected a tag name, found '\"Trim\"': a tag is a name, as in '@tag Trim'", []],
+        ['@tag Trim Glow', "expected ',' or the end of the line after tag 'Trim', found 'Glow'", ['Trim']],
+        ['@tag Trim,', "expected a tag name, found 'the end of the line': a tag is a name, as in '@tag Trim'", ['Trim']],
+        ['@tag Trim, , Glow', "expected a tag name, found ',': a tag is a name, as in '@tag Trim'", ['Trim']],
+        ['@tag , Trim', "expected a tag name, found ',': a tag is a name, as in '@tag Trim'", []],
+        ['@tag UI.', "expected ',' or the end of the line after tag 'UI', found '.'", ['UI']],
+        ['@tag Trim = 3', "expected ',' or the end of the line after tag 'Trim', found '='", ['Trim']],
+        ['@tag (Trim)', "expected a tag name, found '(': a tag is a name, as in '@tag Trim'", []],
+    ];
+    for (const [shape, message, kept] of shapes) {
         // The line ends the statement where it ends: a tag line holds nothing else, so what follows is read afresh.
         const source = wrap('Image T {', `    ${shape}`, '}');
         const built = buildStructure(source);
@@ -100,8 +110,8 @@ test('DUI2024 at the @, for every shape that is neither a tag line nor a node', 
         assert.equal(found.length, 1, `${shape}: ${JSON.stringify(built.diagnostics)}`);
         assert.equal(found[0].severity, 'error', shape);
         assert.equal(source.slice(found[0].start, found[0].start + 1), '@', shape);
-        assert.equal(found[0].message, "'@tag' takes one or more names separated by commas, as in '@tag Trim, Glow'", shape);
-        assert.equal(built.roots[0].children[0].tags, undefined, `${shape}: a refused line tags nothing`);
+        assert.equal(found[0].message, message, shape);
+        assert.deepEqual(tagsOf(built.roots[0].children[0]) ?? [], kept, `${shape}: the names before the mistake are kept`);
         assert.deepEqual(built.diagnostics.filter((diagnostic) => diagnostic.code !== 2024), [], shape);
     }
 });
@@ -114,19 +124,60 @@ test('a refused tag line does not swallow the statements after it', () => {
     assert.equal(image.properties.length, 1);
 });
 
-test('what the mirror cannot say stays the compiler\'s: a tag line in a style block, an if arm or a loop', () => {
-    const inStyle = 'style S {\n    @tag Trim\n    FontSize = 12\n}\nWidget Root {\n    Text T : S {}\n}\n';
-    const style = buildStructure(inStyle);
-    assert.deepEqual(style.diagnostics, [], 'nothing is made up for a style block');
-    assert.equal(style.styles[0].properties.length, 1, 'the statement after it is still read');
+test('DUI2024 in a style block: read by the usual rules, then refused for being in a style', () => {
+    const source = 'style S {\n    @tag Trim\n    FontSize = 12\n}\nWidget Root {\n    Text T : S {}\n}\n';
+    const built = buildStructure(source);
+    assert.deepEqual(built.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.severity, diagnostic.line, diagnostic.message]),
+        [[2024, 'error', 2, "style 'S' cannot carry '@tag': tag the widgets themselves"]]);
+    assert.equal(source.slice(built.diagnostics[0].start, built.diagnostics[0].start + 4), '@tag');
+    assert.equal(built.styles[0].properties.length, 1, 'the statement after it is still read');
 
-    const inBranch = buildStructure(wrap('if Ready() {', '    @tag Trim', '    Text A {}', '}'));
-    assert.deepEqual(inBranch.diagnostics.map((diagnostic) => diagnostic.code), []);
-    assert.equal(inBranch.roots[0].children[0].children.length, 1, 'no node of type @tag in the arm');
+    const both = buildStructure('style S {\n    @tag 5\n}\nWidget Root {}\n').diagnostics;
+    assert.deepEqual(both.map((diagnostic) => diagnostic.message), [
+        "expected a tag name, found '5': a tag is a name, as in '@tag Trim'",
+        "style 'S' cannot carry '@tag': tag the widgets themselves",
+    ]);
+});
 
-    const inLoop = buildStructure(wrap('each Item in Items() {', '    @tag Trim', '    Text A {}', '}'));
-    assert.deepEqual(inLoop.diagnostics.map((diagnostic) => diagnostic.code), []);
-    assert.equal(inLoop.roots[0].children[0].children.length, 1);
+test('DUI2024 in a loop body, one per name, at the @ of the line', () => {
+    const source = wrap('each Item in Items() {', '    @tag Trim, UI.Glow', '    Text A { @tag Kept }', '}');
+    const built = buildStructure(source);
+    assert.deepEqual(built.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.message]), [
+        [2024, "'@tag Trim' tags a widget, and a loop is not one: put it on the widget the loop repeats"],
+        [2024, "'@tag UI.Glow' tags a widget, and a loop is not one: put it on the widget the loop repeats"],
+    ]);
+    for (const diagnostic of built.diagnostics) {
+        assert.equal(source.slice(diagnostic.start, diagnostic.start + 4), '@tag');
+        assert.equal(diagnostic.line, 3);
+    }
+    const loop = built.roots[0].children[0];
+    assert.equal(loop.children.length, 1, 'no node of type @tag in the body');
+    assert.deepEqual(tagsOf(loop.children[0]), ['Kept']);
+});
+
+test('DUI2018 for a tag line directly in an if or else arm, one per name', () => {
+    const source = wrap('if Ready() {', '    @tag Trim, Glow', '    Text A {}', '} else {', '    @tag Other', '    Text B {}', '}');
+    const built = buildStructure(source);
+    assert.deepEqual(built.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.line, diagnostic.message]), [
+        [2018, 3, "'@tag Trim' tags a widget, and an 'if' block holds widgets: put it on a widget inside the block"],
+        [2018, 3, "'@tag Glow' tags a widget, and an 'if' block holds widgets: put it on a widget inside the block"],
+        [2018, 6, "'@tag Other' tags a widget, and an 'if' block holds widgets: put it on a widget inside the block"],
+    ]);
+    assert.equal(source.slice(built.diagnostics[0].start, built.diagnostics[0].start + 4), '@tag');
+});
+
+test('a slot declaration may hold a tag line; a slot that fills may not also hold one (DUI2019)', () => {
+    const declaration = buildStructure(['Widget Root {', '    slot Rows default {', '        @tag Body', '    }', '}', ''].join('\n'));
+    assert.deepEqual(declaration.diagnostics, []);
+    assert.deepEqual(tagsOf(declaration.roots[0].children[0]), ['Body']);
+
+    const mixed = ['use "Row.dui" as Row', 'Widget Root {', '    Row Card {', '        slot Detail {', '            @tag Body', '            Text Note {}', '        }', '    }', '}', ''].join('\n');
+    const found = buildStructure(mixed).diagnostics;
+    assert.deepEqual(found.map((diagnostic) => [diagnostic.code, diagnostic.line, diagnostic.message]), [[2019, 6,
+        "slot 'Detail' both declares (components, properties, '@slot' and '@tag' lines) and fills (widgets); a declaration holds no widgets and a fill holds nothing else"]]);
+
+    const fill = buildStructure(mixed.replace('            @tag Body\n', ''));
+    assert.deepEqual(fill.diagnostics, []);
 });
 
 test('the formatter leaves a tag line alone and keeps the comma and its dots', () => {
