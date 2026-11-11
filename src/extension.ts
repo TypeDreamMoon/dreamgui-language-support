@@ -27,33 +27,43 @@ import { registerBindingIntel } from './bindingIntel';
 import { registerDocumentLinks } from './documentLinks';
 import { registerRevealWatcher } from './revealWatcher';
 import { registerTranslationHover } from './translationHover';
+import { staleCopies } from './core/oldCopies';
 
 /**
- * The id this extension had up to 0.9.1. The Marketplace had the name reserved, so 0.9.2 took a new
- * one, and VS Code sees a copy installed under the old id as a different extension: two of them
- * register `.dui` and every diagnostic, completion and hover comes twice.
+ * A copy of this extension installed under the id it had up to 0.9.1 (see core/oldCopies.ts) makes every `.dui`
+ * diagnostic, completion and hover come twice. Looked for at activation and again whenever the set of installed
+ * extensions changes, since the old copy can arrive (or be re-enabled) after this one started; each id is asked about
+ * once per window.
  */
-const OLD_ID = 'typedreammoon.dreamui-language-support';
-
-function warnAboutOldCopy(): void {
-    if (!vscode.extensions.getExtension(OLD_ID)) {
-        return;
-    }
-    const uninstall = 'Uninstall the old copy';
-    void vscode.window.showWarningMessage(
-        `DreamUI: an older copy of this extension is installed under its previous id (${OLD_ID}); `
-        + 'with both enabled, .dui files get every diagnostic and suggestion twice.',
-        uninstall,
-    ).then(async (choice) => {
-        if (choice !== uninstall) {
+function watchForOldCopies(context: vscode.ExtensionContext): void {
+    const asked = new Set<string>();
+    const check = (): void => {
+        const stale = staleCopies(vscode.extensions.all.map((extension) => extension.id), context.extension.id)
+            .filter((id) => !asked.has(id.toLowerCase()));
+        if (stale.length === 0) {
             return;
         }
-        await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', OLD_ID);
-        const reload = 'Reload Window';
-        if (await vscode.window.showInformationMessage('DreamUI: the old copy is uninstalled.', reload) === reload) {
-            await vscode.commands.executeCommand('workbench.action.reloadWindow');
-        }
-    });
+        stale.forEach((id) => asked.add(id.toLowerCase()));
+        const uninstall = 'Uninstall the old copy';
+        void vscode.window.showWarningMessage(
+            `DreamUI: an older copy of this extension is installed under its previous id (${stale.join(', ')}); `
+            + 'with both enabled, .dui files get every diagnostic and suggestion twice.',
+            uninstall,
+        ).then(async (choice) => {
+            if (choice !== uninstall) {
+                return;
+            }
+            for (const id of stale) {
+                await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', id);
+            }
+            const reload = 'Reload Window';
+            if (await vscode.window.showInformationMessage('DreamUI: the old copy is uninstalled.', reload) === reload) {
+                await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        });
+    };
+    context.subscriptions.push(vscode.extensions.onDidChange(check));
+    check();
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -97,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
         bridgeCache.clear();
         vscode.window.showInformationMessage('DreamUI: bridge caches cleared.');
     }));
-    warnAboutOldCopy();
+    watchForOldCopies(context);
 }
 
 export function deactivate(): void {}
