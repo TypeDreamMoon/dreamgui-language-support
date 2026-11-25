@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.12.0 — 2026-11-12
+## 0.12.0 — 2026-11-25
 
-Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles.
+Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles, and hints at the short spelling of a
+container-typed node.
 
 - **`@tag Trim`, `@tag Glow, UI.Accent`** lines inside a widget's block read as tags of that widget, no longer as a
   child node of type `@tag` (which used to bring DUI2004 and friends). The directive and the names are coloured, and
@@ -24,6 +25,14 @@ Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles.
 - **The old-id warning** is found by name, whoever published it, and looked for again whenever the installed
   extensions change, asking once per id. (A window with only the old 0.7.0 copy installed still cannot see this
   extension: install `typedreammoon.dreamgui-language-support`.)
+- **`Widget Column { + VerticalBox { … } }` hints at `VerticalBox Column { … }`**, the shorter spelling of the same widget
+  and the one the designer's write-back prints: dots under `Widget`, nothing in the Problems panel, and a quickfix that
+  renames the type and moves the block's lines onto the node. Offered only where the build provably does not change --
+  the container is the node's first `+` line, no worn style adds one, every style is declared in the file, no line would
+  change owner (a container property the widget also has, a bare line the container would capture) -- and only with a
+  symbols dump to check that against.
+- **The new-file starter and the `dui-file` snippet** open with `Overlay Root {` instead of `Widget Root { … + Overlay {} }`,
+  the spelling the hint above asks for.
 
 ## 0.11.0 — 2026-11-11
 
