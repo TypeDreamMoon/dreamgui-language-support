@@ -73,6 +73,9 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
   whole table, the component syntax's codes included (`use … as`, `props`, `events`, `if`, slots,
   `for`, `emit` and the two new write-back refusals), and is held to it by test.
 - **Quickfixes**: declare the unknown resource (DUI4007), create the unknown style (DUI3004).
+- **The short spelling of a laid-out node**: `Widget Column { + VerticalBox { … } }` gets a hint (dots, not a
+  problem) and a quickfix to `VerticalBox Column { … }`, the container's lines moved onto the node. Offered only where
+  the symbols dump shows the compiler builds the same widget either way.
 - **A new-file command** ("DreamUI: New .dui File", also on a folder's context menu) writing the
   same starter the Unreal editor's "Create Source File..." writes — a root plus one centred
   label, so the first compile answers "did this work" by appearing.

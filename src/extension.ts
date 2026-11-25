@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerNewFile(context);
     const mailbox = registerMailbox(context);
     registerStatusBar(context, store, mailbox);
-    registerQuickfixes(context, workspaceHost);
+    registerQuickfixes(context, workspaceHost, store);
     registerExplain(context);
     registerNavigation(context, workspaceHost);
     registerRename(context);

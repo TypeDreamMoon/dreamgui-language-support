@@ -8,7 +8,10 @@
  * naming the one component file whose name is the type (`Row.dui`, or `NieR_Row.dui` in a family
  * that prefixes its files).
  *
- * All plans are pure insertions computed in core; nothing existing moves, and nothing here
+ * The `VerticalBox Column` hint (core/containerType.ts) gets its rewrite: the type renamed, the `+` block's lines moved
+ * onto the node. The one fix here that moves text, and so the one whose edits core proves build the same widget.
+ *
+ * The other plans are pure insertions computed in core; nothing existing moves, and nothing here
  * decides anything the compiler decides.
  */
 import * as vscode from 'vscode';
@@ -17,8 +20,10 @@ import { planDeclareResource, planCreateStyle, EditPlan } from './core/quickfixe
 import { filesDeclaring, planUseInsertion, planUseSpelling, componentFilesNamed } from './core/useFix';
 import { WorkspaceIndexHost } from './workspace';
 import { codeText } from './codeLinks';
+import { containerTypeRewrites, layoutFactsFrom } from './core/containerType';
+import { SymbolStore } from './symbols';
 
-export function registerQuickfixes(context: vscode.ExtensionContext, host?: WorkspaceIndexHost): void {
+export function registerQuickfixes(context: vscode.ExtensionContext, host?: WorkspaceIndexHost, store?: SymbolStore): void {
     context.subscriptions.push(vscode.languages.registerCodeActionsProvider({ language: 'dui' }, {
         provideCodeActions(document, _range, actionContext) {
             const actions: vscode.CodeAction[] = [];
@@ -129,6 +134,31 @@ export function registerQuickfixes(context: vscode.ExtensionContext, host?: Work
                     actions.push(toAction(`Create style '${name}'`,
                         planCreateStyle(model.structure, name, document.getText().length),
                         diagnostic, importer === undefined));
+                }
+            }
+
+            // `Widget Column { + VerticalBox { … } }` -> `VerticalBox Column { … }`: the hint's own edits, recomputed
+            // here from the same parse, attached to the hint whose range is the `Widget` they rewrite.
+            const hints = actionContext.diagnostics.filter((diagnostic) =>
+                diagnostic.source === 'dui' && diagnostic.severity === vscode.DiagnosticSeverity.Hint);
+            if (hints.length > 0) {
+                const rewrites = containerTypeRewrites(model.structure, document.getText(), layoutFactsFrom(store?.symbols));
+                for (const diagnostic of hints) {
+                    const start = document.offsetAt(diagnostic.range.start);
+                    const rewrite = rewrites.find((candidate) => candidate.start === start);
+                    if (!rewrite) {
+                        continue;
+                    }
+                    const name = rewrite.id ? `${rewrite.container} ${rewrite.id}` : rewrite.container;
+                    const action = new vscode.CodeAction(`Write as '${name}'`, vscode.CodeActionKind.QuickFix);
+                    action.diagnostics = [diagnostic];
+                    action.isPreferred = true;
+                    action.edit = new vscode.WorkspaceEdit();
+                    for (const change of rewrite.edits) {
+                        action.edit.replace(document.uri,
+                            new vscode.Range(document.positionAt(change.start), document.positionAt(change.end)), change.newText);
+                    }
+                    actions.push(action);
                 }
             }
             return actions;

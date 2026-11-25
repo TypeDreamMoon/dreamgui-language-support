@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { SymbolStore } from './symbols';
 import { buildModel } from './docmodel';
 import { CoreDiagnostic, judgeDocument } from './core/diagnose';
+import { layoutFactsFrom } from './core/containerType';
 import { formatCode } from './core/scanner';
 import { linkedCode } from './codeLinks';
 import { WorkspaceIndexHost } from './workspace';
@@ -56,6 +57,8 @@ export function registerDiagnostics(context: vscode.ExtensionContext, store: Sym
             tags: symbols ? Object.keys(symbols.tags) : undefined,
             // What each tag IS (a visual, a container and its class): the words DUI3018 is said in.
             tagInfo: symbols?.tags,
+            // What each container and the widget have: the `VerticalBox Column` hint needs both to know it is safe.
+            layoutFacts: layoutFactsFrom(symbols),
         });
 
         collection.set(document.uri, judged.map((source) => toVscode(document, source)));
@@ -93,6 +96,7 @@ const SEVERITIES: Record<CoreDiagnostic['severity'], vscode.DiagnosticSeverity> 
     error: vscode.DiagnosticSeverity.Error,
     warning: vscode.DiagnosticSeverity.Warning,
     information: vscode.DiagnosticSeverity.Information,
+    hint: vscode.DiagnosticSeverity.Hint,
 };
 
 function toVscode(document: vscode.TextDocument, source: CoreDiagnostic): vscode.Diagnostic {

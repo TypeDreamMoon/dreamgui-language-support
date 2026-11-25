@@ -18,6 +18,7 @@
  */
 
 import { buildStructure, StructNode } from './structure';
+import { containerTypeRewrites, LayoutFacts } from './containerType';
 import { ImportScope, WorkspaceIndex, usesOf } from './workspaceIndex';
 
 /**
@@ -29,7 +30,11 @@ import { ImportScope, WorkspaceIndex, usesOf } from './workspaceIndex';
 export interface CoreDiagnostic {
     /** The numeric half of DUInnnn. Absent for the checks the compiler has no code for. */
     code?: number;
-    severity: 'error' | 'warning' | 'information';
+    /**
+     * 'hint' is advice, never a verdict: the compiler accepts what it marks. A host shows it as faintly as it can (VS
+     * Code: dots under the text, nothing in the Problems panel).
+     */
+    severity: 'error' | 'warning' | 'information' | 'hint';
     /** Without the code prefix: the host spells `DUInnnn: ` in front when there is a code. */
     message: string;
     start: number;
@@ -57,6 +62,11 @@ export interface JudgeInput {
      * word only refuses an alias when it is a visual's tag or a container. Absent, DUI3018 is not judged.
      */
     tagInfo?: Readonly<Record<string, { kind?: string; class?: string }>>;
+    /**
+     * What the dump says containers and the widget have (layoutFactsFrom): enough to offer `VerticalBox Column` for
+     * `Widget Column { + VerticalBox { … } }`. Absent, that hint is not given.
+     */
+    layoutFacts?: LayoutFacts;
     /** The parse of `text`, when the caller already made one. Must be that parse and no other. */
     structure?: DuiStructure;
 }
@@ -262,6 +272,17 @@ export function judgeDocument(input: JudgeInput): CoreDiagnostic[] {
             node.children.forEach(visit);
         };
         structure.roots.forEach(visit);
+    }
+
+    // The long spelling of a container-typed node. Advice only, and only where the rewrite provably builds the same
+    // widget (containerType.ts says what that takes); the quickfix applies the same edits.
+    for (const rewrite of containerTypeRewrites(structure, input.text, input.layoutFacts)) {
+        const name = rewrite.id ? `${rewrite.container} ${rewrite.id}` : rewrite.container;
+        out.push({
+            severity: 'hint',
+            message: `can be written '${name} { … }': a node's type can be its layout container, and the container's lines then sit on the node`,
+            start: rewrite.start, end: rewrite.end,
+        });
     }
 
     return out;
