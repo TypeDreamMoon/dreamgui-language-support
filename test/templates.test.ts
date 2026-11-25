@@ -19,7 +19,9 @@ test('the starter renders something: a root, an overlay, a centred label', () =>
     assert.equal(built.roots.length, 1);
     const root = built.roots[0];
     assert.equal(root.id, 'Root');
-    assert.deepEqual(root.components.map((c) => c.name), ['Overlay']);
+    // The overlay is the root's type (`Overlay Root`), not a `+` line: the spelling the designer's write-back prints.
+    assert.equal(root.tag, 'Overlay');
+    assert.deepEqual(root.components, []);
     assert.deepEqual(root.children.map((c) => c.id), ['Title']);
 });
 

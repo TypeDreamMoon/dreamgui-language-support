@@ -10,12 +10,10 @@ export function duiStarter(fileName: string, classPath: string, title: string): 
     return `// ${fileName}\n`
         + `class ${classPath}\n`
         + `\n`
-        + `Widget Root {\n`
+        + `Overlay Root {\n`
         + `    AnchorData.AnchorMin = (0, 0)\n`
         + `    AnchorData.AnchorMax = (1, 1)\n`
         + `    AnchorData.SizeDelta = (0, 0)\n`
-        + `\n`
-        + `    + Overlay {}\n`
         + `\n`
         + `    Text Title {\n`
         + `        Text     = "${title}"\n`

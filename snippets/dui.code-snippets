@@ -5,17 +5,15 @@
       "// ${TM_FILENAME}",
       "class ${1:/Game/UI/WBP_${TM_FILENAME_BASE}}",
       "",
-      "Widget Root {",
+      "Overlay Root {",
       "    AnchorData.AnchorMin = (0, 0)",
       "    AnchorData.AnchorMax = (1, 1)",
       "    AnchorData.SizeDelta = (0, 0)",
       "",
-      "    + Overlay {}",
-      "",
       "    $0",
       "}"
     ],
-    "description": "A root that fills its canvas, with an Overlay to lay children out"
+    "description": "A root that fills its canvas and lays its children out as an Overlay"
   },
   "Resources block": {
     "prefix": "resources",
