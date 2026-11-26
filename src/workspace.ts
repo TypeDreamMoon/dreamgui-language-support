@@ -17,6 +17,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { WorkspaceIndex } from './core/workspaceIndex';
+import {
+    DREAM_SOURCE_DIRECTORY, DREAM_UI, findProjectRoot, isUnder, pluginSourceRoots, resolveProjectSourceRoot,
+} from './core/dreamSource';
+import { nodeFs } from './dreamSourceHost';
 
 /**
  * What makes a directory a DUI root, in the order a walk upwards meets them. The name `DUI` is the
@@ -134,8 +138,9 @@ export class WorkspaceIndexHost implements vscode.Disposable {
     // ---- roots -------------------------------------------------------------------------------
 
     /**
-     * The DUI root a file outside the workspace belongs to: the nearest ancestor named `DUI` or
-     * carrying one of the marker files, and failing both the file's own directory.
+     * The DUI root a file outside the workspace belongs to: its project's (or a plugin's) UI source
+     * folder when it is under one, else the nearest ancestor named `DUI` or `DreamSource/UI` or
+     * carrying one of the marker files, and failing all of those the file's own directory.
      *
      * A file INSIDE a workspace folder gets none: findFiles already covers it, and adopting a
      * second reader for the same tree would only mean scanning it twice and watching it twice.
@@ -150,9 +155,23 @@ export class WorkspaceIndexHost implements vscode.Disposable {
             // buffer's). Either way the fallback below would hand a whole volume to the scanner.
             return undefined;
         }
+        // The project's own UI folder wherever it is configured, and the plugins' (DreamSource layout).
+        const projectDir = findProjectRoot(own, nodeFs, path.dirname);
+        if (projectDir) {
+            const roots = [
+                resolveProjectSourceRoot(projectDir, DREAM_UI, nodeFs, path.join).activeDir,
+                ...pluginSourceRoots(projectDir, DREAM_UI, nodeFs, path.join).map((root) => root.directory),
+            ];
+            const owning = roots.find((root): root is string => root !== undefined && isUnder(documentPath, root));
+            if (owning) {
+                return owning;
+            }
+        }
         let directory = own;
         for (let hop = 0; hop < MAX_ROOT_HOPS; hop++) {
-            if (path.basename(directory).toLowerCase() === 'dui') {
+            const name = path.basename(directory).toLowerCase();
+            if (name === 'dui' || (name === DREAM_UI.key.toLowerCase()
+                && path.basename(path.dirname(directory)).toLowerCase() === DREAM_SOURCE_DIRECTORY.toLowerCase())) {
                 return directory;
             }
             for (const marker of ROOT_MARKERS) {

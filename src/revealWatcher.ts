@@ -9,7 +9,7 @@
  * stamp already acted on is never acted on twice, which is what makes an overwrite safe.
  *
  * Two watchers, not one. `createFileSystemWatcher` over an absolute RelativePattern does reach
- * outside the workspace -- the project's Saved/ folder rarely is inside it -- but it is a
+ * outside the workspace -- the project's Intermediate/ folder rarely is inside it -- but it is a
  * platform watcher with a platform's exclusions, and this file lives under a directory some
  * setups tell their watcher to ignore wholesale. `fs.watchFile` is a one-file stat poll: it costs
  * a stat a second per project and it cannot be configured away. Both funnel into one handler,
@@ -20,7 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { BridgeClient } from './bridge';
 import {
-    bridgePaths, parseRevealToEditor, revealToEditorPath,
+    parseRevealToEditor, revealToEditorPaths,
     REVEAL_TO_EDITOR_FILE, REVEAL_TO_EDITOR_STALE_MS,
 } from './core/bridgeProtocol';
 
@@ -40,14 +40,21 @@ class RevealWatcher implements vscode.Disposable {
         if (!projectDir) {
             return;
         }
-        const filePath = revealToEditorPath(projectDir, path.join);
+        // Both bridges: the current one, and the one a plugin from before the DreamSource layout
+        // still writes to. An editor speaks on one of them; which one is not known until it writes.
+        for (const filePath of revealToEditorPaths(projectDir, path.join)) {
+            this.watchFile(filePath);
+        }
+    }
+
+    private watchFile(filePath: string): void {
         if (this.watching.has(filePath)) {
             return;
         }
         const disposables: vscode.Disposable[] = [];
         this.watching.set(filePath, disposables);
 
-        const directory = bridgePaths(projectDir, path.join).root;
+        const directory = path.dirname(filePath);
         try {
             const watcher = vscode.workspace.createFileSystemWatcher(
                 new vscode.RelativePattern(vscode.Uri.file(directory), REVEAL_TO_EDITOR_FILE));

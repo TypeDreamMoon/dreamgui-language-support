@@ -28,6 +28,8 @@ import { registerDocumentLinks } from './documentLinks';
 import { registerRevealWatcher } from './revealWatcher';
 import { registerTranslationHover } from './translationHover';
 import { staleCopies } from './core/oldCopies';
+import { DreamSourceHost } from './dreamSourceHost';
+import { registerDreamSourceMigration } from './migration';
 
 /**
  * A copy of this extension installed under the id it had up to 0.9.1 (see core/oldCopies.ts) makes every `.dui`
@@ -67,7 +69,9 @@ function watchForOldCopies(context: vscode.ExtensionContext): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-    const store = new SymbolStore();
+    const host = new DreamSourceHost();
+    context.subscriptions.push(host);
+    const store = new SymbolStore(host);
     context.subscriptions.push(store);
 
     store.ensureLoadedFor(vscode.window.activeTextEditor?.document.uri.fsPath);
@@ -76,7 +80,9 @@ export function activate(context: vscode.ExtensionContext): void {
         store.reload();
         vscode.window.showInformationMessage(store.sourcePath
             ? `DreamUI: symbols reloaded from ${store.sourcePath}`
-            : 'DreamUI: no .dui-symbols.json found. Open the Unreal editor once (or run DreamUI.ExportSymbols in its console) with a DUI/ directory in the project.');
+            : `DreamUI: no symbols found. Open the project in the Unreal editor once (or run DreamUI.ExportSymbols in `
+            + `its console) with a DreamSource/UI/ folder in it; the editor writes Intermediate/DreamSource/ui.db.`
+            + (host.sqliteAvailable ? '' : ' This VS Code cannot read that database (no node:sqlite); update VS Code.'));
     }));
 
     // The index first: completion, hover and semantic tokens read what a file borrows through its `use` lines.
@@ -87,8 +93,8 @@ export function activate(context: vscode.ExtensionContext): void {
     registerSemanticTokens(context, workspaceHost);
     registerEditing(context);
     registerFormatting(context);
-    registerNewFile(context);
-    const mailbox = registerMailbox(context);
+    registerNewFile(context, host);
+    const mailbox = registerMailbox(context, host);
     registerStatusBar(context, store, mailbox);
     registerQuickfixes(context, workspaceHost, store);
     registerExplain(context);
@@ -103,6 +109,11 @@ export function activate(context: vscode.ExtensionContext): void {
     registerBindingIntel(context, bridge, bridgeCache, workspaceHost);
     registerDocumentLinks(context, workspaceHost);
     registerRevealWatcher(context, bridge);
+    registerDreamSourceMigration(context, host, bridge, () => {
+        const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+        store.reload();
+        mailbox.relocate(active);
+    });
     context.subscriptions.push(vscode.commands.registerCommand('dreamui.clearBridgeCache', () => {
         bridgeCache.clear();
         vscode.window.showInformationMessage('DreamUI: bridge caches cleared.');
