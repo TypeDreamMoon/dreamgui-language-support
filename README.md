@@ -79,8 +79,8 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
 - **A new-file command** ("DreamUI: New .dui File", also on a folder's context menu) writing the
   same starter the Unreal editor's "Create Source File..." writes — a root plus one centred
   label, so the first compile answers "did this work" by appearing.
-- **A status bar item** showing whether symbols are loaded — a missing `.dui-symbols.json` is a
-  visible warning with instructions, not a silent downgrade.
+- **A status bar item** showing whether symbols are loaded — missing symbols are a visible
+  warning with instructions, not a silent downgrade.
 - **Workspace navigation**: Ctrl+T over every id, style and resource in every .dui; F12 on a
   nested `/Game/X` tag lands on the file whose class line declares it, and F12 on a `use "…"`
   spelling opens the imported file when exactly one workspace file matches it; find-references
@@ -93,7 +93,7 @@ Language support for DreamGUI `.dui` widget hierarchies. DreamGUI and the langua
   selected property lines become a style the node wears, a worn style inlines back
   base-first-derived-overriding.
 - **Compiler diagnostics, live**: with the Unreal editor running, every compile of a text-backed
-  class delivers its verdicts to `DUI/.dui-diagnostics.json`, and they appear in Problems as
+  class delivers its verdicts to the project's `Intermediate/DreamSource/ui.db`, and they appear in Problems as
   `dui-compiler` — the semantic layer (unknown properties, bad values, missing binding functions)
   beside the grammar-level checks, without this extension growing a second compiler. Hover shows
   UPROPERTY tooltips and pasteable class defaults from the widened symbols dump.
@@ -151,12 +151,27 @@ Two things that look like gaps and are not:
 
 ## Where the smarts come from
 
-The Unreal plugin writes `DUI/.dui-symbols.json` on every editor startup (or on demand via the
-console command `DreamUI.ExportSymbols`). This extension reads that file, so completion offers
-exactly what the compiler accepts — the two cannot drift, because there is only one list.
+The Unreal plugin writes its symbols into `Intermediate/DreamSource/ui.db` on every editor startup
+(or on demand via the console command `DreamUI.ExportSymbols`). This extension reads that database,
+so completion offers exactly what the compiler accepts — the two cannot drift, because there is
+only one list.
 
-No symbols file yet? Open the project in the Unreal editor once, with a `DUI/` directory present.
+No symbols yet? Open the project in the Unreal editor once, with a `DreamSource/UI/` folder present.
 Everything grammar-driven works without it, and the status bar says which mode you are in.
+
+### Where things live (DreamSource layout)
+
+| What | Where |
+|---|---|
+| The project's `.dui` sources | `DreamSource/UI/` — configurable in Project Settings › Dream Source › UI (`Config/DefaultDreamSource.ini`) |
+| A plugin's `.dui` sources | `<Plugin>/DreamSource/UI/` |
+| Symbols and compiler diagnostics | `Intermediate/DreamSource/ui.db` (SQLite, read with VS Code's built-in `node:sqlite`) |
+| The editor bridge | `Intermediate/DreamSource/UI/Bridge/` |
+
+The old `DUI/` folder still works; the extension says it is deprecated and offers
+**DreamUI: Migrate DUI/ to DreamSource** (close the Unreal editor first). With an older DreamGUI plugin,
+the extension falls back to the `.dui-symbols.json` / `.dui-diagnostics.json` it writes and to its
+`Saved/DreamGUI/Bridge/`.
 
 Language smarts beyond one file's characters — property types, bindings, asset paths — stay in
 the compiler, and reach the editor through the compiler's own diagnostics rather than a second
