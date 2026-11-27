@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    BridgeAction, BridgeRequest, BridgeResponse, bridgePaths, buildRequest, makeRequestId,
+    BridgeAction, BridgeRequest, BridgeResponse, chooseBridgePaths, buildRequest, makeRequestId,
     parseResponse, parseStatus, livenessOf, canServe, Liveness,
 } from './core/bridgeProtocol';
 
@@ -61,10 +61,12 @@ export class BridgeClient implements vscode.Disposable {
 
     livenessFor(documentPath: string | undefined): Liveness {
         const projectDir = this.resolveProjectDir(documentPath);
-        if (!projectDir) {
-            return 'closed';
-        }
-        const paths = bridgePaths(projectDir, path.join);
+        return projectDir ? this.livenessForProject(projectDir) : 'closed';
+    }
+
+    /** Whether an editor has this project open, whichever bridge (current or pre-DreamSource) it speaks on. */
+    livenessForProject(projectDir: string): Liveness {
+        const paths = chooseBridgePaths(projectDir, path.join, fs.existsSync);
         let status;
         try {
             status = parseStatus(fs.readFileSync(paths.status, 'utf8'));
@@ -86,7 +88,7 @@ export class BridgeClient implements vscode.Disposable {
         if (!projectDir || !canServe(this.livenessFor(documentPath))) {
             return undefined;
         }
-        const paths = bridgePaths(projectDir, path.join);
+        const paths = chooseBridgePaths(projectDir, path.join, fs.existsSync);
         try {
             fs.mkdirSync(paths.requests, { recursive: true });
             fs.mkdirSync(paths.responses, { recursive: true });

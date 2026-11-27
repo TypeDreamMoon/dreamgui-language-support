@@ -26,7 +26,7 @@ DreamGUI `.dui` 界面层级的语言支持。DreamGUI 和这门语言的文档�
 - **组件语法的代码片段**:组件文件(`dui-component`)、`props`、`events`、`emit`、`use-as`、`use-class`、
   `for`、`if` / `ifelse`、`slot-default`、`slot-fill`、`slotblock`、`shown`、`vbox`、`hbox`,与原有片段并列。
 - **按上下文补全**:内建 tag、布局容器、组件类、逐类属性、枚举值、槽属性、资源类型、`@` 资源引用、`->` 事件名;
-  数据来自插件导出的 `.dui-symbols.json` —— 补全提供的恰是编译器接受的,单一清单不漂移。组件语法同样有补全:
+  数据来自插件导出到 `Intermediate/DreamSource/ui.db` 的符号 —— 补全提供的恰是编译器接受的,单一清单不漂移。组件语法同样有补全:
   文件可用作节点类型的别名(自己的 `use … as` 与库转出的)、`ns.` 命名空间、`props { }` / `events { }` 里的类型词、
   `->` 之后的 `emit` 与本文件的事件、`@` 之后的 `slot` / `fill` / `key`、只在合法位置出现的关键字,以及组件实例上
   它的 props、events 与插槽;容器类型的节点也补全容器的属性,`Shown` 是每个控件都有的属性。
@@ -55,8 +55,13 @@ DreamGUI `.dui` 界面层级的语言支持。DreamGUI 和这门语言的文档�
   穿着的样式按基先派后展开回节点,样式里的 `+` 组件与槽属性一并带回。未知组件类型(DUI3003)在工作区里恰好有一个
   同名组件文件时,快速修复会补上 `use "…" as X`。
 - **编译器诊断实时送达**:Unreal 编辑器开着时,每次编译 text-backed 类都会把裁决写进
-  `DUI/.dui-diagnostics.json`,以 `dui-compiler` 来源出现在问题面板 —— 语义层(未知属性、坏值、
+  工程的 `Intermediate/DreamSource/ui.db`,以 `dui-compiler` 来源出现在问题面板 —— 语义层(未知属性、坏值、
   缺失的绑定函数)与语法层并排,而扩展自己不长第二个编译器。
+- **DreamSource 目录布局**:工程的 `.dui` 放在 `DreamSource/UI/`(可在 Project Settings › Dream Source › UI 修改,
+  即 `Config/DefaultDreamSource.ini`),插件的放在 `<Plugin>/DreamSource/UI/`;编辑器桥接在
+  `Intermediate/DreamSource/UI/Bridge/`。旧的 `DUI/` 仍可用,扩展会提示已废弃,并提供
+  **DreamUI: Migrate DUI/ to DreamSource** 命令(先关闭 Unreal 编辑器)。配旧版 DreamGUI 插件时,自动回退读取
+  `.dui-symbols.json` / `.dui-diagnostics.json` 与 `Saved/DreamGUI/Bridge/`。
 - **桥接 Unreal 编辑器**:`<-` / `->` 补全向活编辑器询问该类真正声明的函数;打 `/` 补全全部可嵌套的
   widget 类(编辑器在线走资产注册表,离线走 workspace 的 class 行);
   **Reveal in Unreal Designer** 打开设计器并选中光标所在节点;**Compile This File** 立即编译,

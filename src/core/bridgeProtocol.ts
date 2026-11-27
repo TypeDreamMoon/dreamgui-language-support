@@ -144,15 +144,41 @@ export interface BridgePaths {
     status: string;
 }
 
-/** Everything lives under Saved/, which is already outside version control. */
-export function bridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
-    const root = join(projectDir, 'Saved', 'DreamGUI', 'Bridge');
+function pathsUnder(root: string, join: (...parts: string[]) => string): BridgePaths {
     return {
         root,
         requests: join(root, 'Requests'),
         responses: join(root, 'Responses'),
         status: join(root, 'status.json'),
     };
+}
+
+/**
+ * Where the bridge lives: `<Project>/Intermediate/DreamSource/UI/Bridge`, beside the rest of what the
+ * editor generates for this language (DreamSource layout, spec 11.4). Outside version control either way.
+ */
+export function bridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
+    return pathsUnder(join(projectDir, 'Intermediate', 'DreamSource', 'UI', 'Bridge'), join);
+}
+
+/** Where a plugin from before the DreamSource layout keeps it: `<Project>/Saved/DreamGUI/Bridge`. */
+export function legacyBridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
+    return pathsUnder(join(projectDir, 'Saved', 'DreamGUI', 'Bridge'), join);
+}
+
+/**
+ * The bridge to talk to: the new one when its editor has written a status there, else the old one when
+ * an older plugin has, else the new one (nobody is listening yet, and the new place is where the next
+ * editor will be).
+ */
+export function chooseBridgePaths(projectDir: string, join: (...parts: string[]) => string,
+    exists: (path: string) => boolean): BridgePaths {
+    const current = bridgePaths(projectDir, join);
+    if (exists(current.status)) {
+        return current;
+    }
+    const legacy = legacyBridgePaths(projectDir, join);
+    return exists(legacy.status) ? legacy : current;
 }
 
 /** The editor rewrites status.json every two seconds; inside this budget it is alive. */
@@ -377,6 +403,14 @@ export interface RevealToEditor {
 
 export function revealToEditorPath(projectDir: string, join: (...parts: string[]) => string): string {
     return join(bridgePaths(projectDir, join).root, REVEAL_TO_EDITOR_FILE);
+}
+
+/** Both places an editor may write the reveal file: the current bridge's, then an older plugin's. */
+export function revealToEditorPaths(projectDir: string, join: (...parts: string[]) => string): string[] {
+    return [
+        revealToEditorPath(projectDir, join),
+        join(legacyBridgePaths(projectDir, join).root, REVEAL_TO_EDITOR_FILE),
+    ];
 }
 
 /**

@@ -8,14 +8,29 @@ import * as path from 'path';
 import { buildModel } from './docmodel';
 import { dlocPathOf, findEntry, textAt } from './core/translations';
 
-/** The folder that holds the .dui's DUI/ (the project's, or a plugin's), and the .dui's path from it: `DUI/UI/Settings.dui`. */
+/**
+ * The folder that holds the .dui's source folder (the project, or a plugin), and the .dui's path as DreamLoc keys it:
+ * `DUI/UI/Settings.dui`. A file under `DreamSource/UI/` is keyed the same way for now -- DreamLoc still spells the source
+ * `DUI/...` whatever folder it sits in; the DreamSource layout's Loc step changes that key on both sides together.
+ */
 export function ownerOf(filePath: string): { owner: string; source: string } | undefined {
     const parts = filePath.split(/[\\/]/);
-    const index = parts.map(part => part.toLowerCase()).lastIndexOf('dui');
-    if (index <= 0 || index === parts.length - 1) {
+    const lower = parts.map(part => part.toLowerCase());
+    let index = lower.lastIndexOf('dui');
+    let ownerEnd = index;
+    for (let at = lower.length - 2; at > 0; at--) {
+        if (lower[at] === 'ui' && lower[at - 1] === 'dreamsource') {
+            if (at > index) {
+                index = at;
+                ownerEnd = at - 1;
+            }
+            break;
+        }
+    }
+    if (ownerEnd <= 0 || index === parts.length - 1) {
         return undefined;
     }
-    return { owner: parts.slice(0, index).join('/'), source: ['DUI', ...parts.slice(index + 1)].join('/') };
+    return { owner: parts.slice(0, ownerEnd).join('/'), source: ['DUI', ...parts.slice(index + 1)].join('/') };
 }
 
 function escapeMarkdown(text: string): string {

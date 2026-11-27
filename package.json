@@ -15,7 +15,7 @@
   "homepage": "https://gui.toolchain.64hz.cn",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.147.0"
   },
   "categories": [
     "Programming Languages",
@@ -68,7 +68,7 @@
     "commands": [
       {
         "command": "dreamui.reloadSymbols",
-        "title": "DreamUI: Reload Symbols (.dui-symbols.json)",
+        "title": "DreamUI: Reload Symbols",
         "icon": "$(refresh)"
       },
       {
@@ -89,6 +89,10 @@
       {
         "command": "dreamui.clearBridgeCache",
         "title": "DreamUI: Clear Bridge Caches"
+      },
+      {
+        "command": "dreamui.migrateToDreamSource",
+        "title": "DreamUI: Migrate DUI/ to DreamSource"
       }
     ],
     "menus": {
@@ -130,7 +134,7 @@
         "dreamui.symbolsPath": {
           "type": "string",
           "default": "",
-          "description": "Explicit path to .dui-symbols.json. Empty = search each workspace folder's DUI/ directory and the folders above the open file."
+          "description": "Explicit path to a .dui-symbols.json, read instead of the editor's Intermediate/DreamSource/ui.db. Empty = the project's ui.db, or (from an older plugin) the .dui-symbols.json in DUI/ or the folders above the open file."
         }
       }
     },

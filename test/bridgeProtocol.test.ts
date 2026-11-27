@@ -7,7 +7,8 @@ import * as assert from 'node:assert/strict';
 import {
     livenessOf, canServe, makeRequestId, buildRequest, parseResponse, parseStatus,
     bridgePaths, PROTOCOL_VERSION, HEARTBEAT_STALE_MS, BUSY_STALE_MS, BridgeStatus,
-    parseRevealToEditor, revealToEditorPath, REVEAL_TO_EDITOR_FILE,
+    parseRevealToEditor, revealToEditorPath, revealToEditorPaths, REVEAL_TO_EDITOR_FILE,
+    legacyBridgePaths, chooseBridgePaths,
 } from '../src/core/bridgeProtocol';
 
 const NOW = Date.parse('2026-08-30T12:00:00Z');
@@ -84,10 +85,24 @@ test('parseStatus narrows on the heartbeat, the one field liveness cannot do wit
     assert.equal(parsed.pid, 1234);
 });
 
-test('bridge paths live under Saved, outside version control', () => {
+test('bridge paths live under Intermediate/DreamSource/UI, outside version control', () => {
     const paths = bridgePaths('X:/Proj', (...parts) => parts.join('/'));
-    assert.equal(paths.requests, 'X:/Proj/Saved/DreamGUI/Bridge/Requests');
-    assert.equal(paths.status, 'X:/Proj/Saved/DreamGUI/Bridge/status.json');
+    assert.equal(paths.requests, 'X:/Proj/Intermediate/DreamSource/UI/Bridge/Requests');
+    assert.equal(paths.status, 'X:/Proj/Intermediate/DreamSource/UI/Bridge/status.json');
+    assert.equal(legacyBridgePaths('X:/Proj', (...parts) => parts.join('/')).status,
+        'X:/Proj/Saved/DreamGUI/Bridge/status.json');
+});
+
+test('the bridge falls back to Saved/DreamGUI only when an older editor is the one speaking there', () => {
+    const join = (...parts: string[]): string => parts.join('/');
+    const current = 'X:/Proj/Intermediate/DreamSource/UI/Bridge';
+    const legacy = 'X:/Proj/Saved/DreamGUI/Bridge';
+    const pick = (present: string[]): string =>
+        chooseBridgePaths('X:/Proj', join, (path) => present.includes(path)).root;
+    assert.equal(pick([]), current, 'nobody listening: the new place');
+    assert.equal(pick([`${legacy}/status.json`]), legacy, 'only an older plugin: its place');
+    assert.equal(pick([`${current}/status.json`, `${legacy}/status.json`]), current, 'both: the new one wins');
+    assert.equal(pick([`${current}/status.json`]), current);
 });
 
 test('buildRequest carries the type and asset extras the new actions ask with', () => {
@@ -148,9 +163,14 @@ test('a payload keeps the entries it can vouch for and drops the ones it cannot'
     assert.equal(parsed.elementType, undefined);
 });
 
-test('the reveal file sits beside the rest of the bridge', () => {
-    assert.equal(revealToEditorPath('X:/Proj', (...parts) => parts.join('/')),
-        `X:/Proj/Saved/DreamGUI/Bridge/${REVEAL_TO_EDITOR_FILE}`);
+test('the reveal file sits beside the rest of the bridge, and is also watched where an older editor writes it', () => {
+    const join = (...parts: string[]): string => parts.join('/');
+    assert.equal(revealToEditorPath('X:/Proj', join),
+        `X:/Proj/Intermediate/DreamSource/UI/Bridge/${REVEAL_TO_EDITOR_FILE}`);
+    assert.deepEqual(revealToEditorPaths('X:/Proj', join), [
+        `X:/Proj/Intermediate/DreamSource/UI/Bridge/${REVEAL_TO_EDITOR_FILE}`,
+        `X:/Proj/Saved/DreamGUI/Bridge/${REVEAL_TO_EDITOR_FILE}`,
+    ]);
 });
 
 test('parseRevealToEditor takes a whole message and refuses a partial one', () => {

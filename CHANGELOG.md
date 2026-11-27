@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.0 — 2026-11-27
+
+Follows DreamGUI into the DreamSource layout. Needs VS Code 1.147 or later (its Node has `node:sqlite`).
+
+- **Symbols and compiler diagnostics come from `Intermediate/DreamSource/ui.db`**, the SQLite database the editor now
+  writes, read with VS Code's built-in `node:sqlite` (nothing native ships with the extension). Only the part that
+  changed is reloaded: a compile no longer re-reads the 1.8 MB symbols dump. With an older plugin, or a VS Code whose
+  Node lacks `node:sqlite`, the extension reads `.dui-symbols.json` / `.dui-diagnostics.json` as before.
+- **Sources live in `DreamSource/UI/`** (configurable in Project Settings › Dream Source › UI, which is
+  `Config/DefaultDreamSource.ini`; a plugin's in `<Plugin>/DreamSource/UI/`). New .dui files, the index's root for a
+  file opened on its own and the translation hover all follow it.
+- **The old `DUI/` keeps working and is said to be deprecated**, once per project per window, with
+  **DreamUI: Migrate DUI/ to DreamSource** (refused while the Unreal editor has the project open, or when
+  `DreamSource/UI/` already exists) and "Don't show again". A `DUI/` beside an existing `DreamSource/UI/` is reported
+  as ignored.
+- **The bridge moved to `Intermediate/DreamSource/UI/Bridge/`**; an editor still speaking on `Saved/DreamGUI/Bridge/`
+  is found there, and reveal requests are watched in both.
+
 ## 0.12.0 — 2026-11-25
 
 Follows DreamGUI's `@tag`, `@slot Size`, struct maps and multiple styles, and hints at the short spelling of a

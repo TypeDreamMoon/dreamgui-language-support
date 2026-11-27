@@ -1,6 +1,7 @@
 /**
  * One bundle: the extension host loads out/extension.js and nothing else, so node_modules never
  * ships. `vscode` is external because the editor injects it at load time; it exists on no disk.
+ * `node:sqlite` likewise belongs to the host's Node.
  */
 const esbuild = require('esbuild');
 
@@ -14,7 +15,8 @@ const options = {
 	format: 'cjs',
 	platform: 'node',
 	target: 'node18',
-	external: ['vscode'],
+	// node:sqlite is the host's own (Node >= 22.13), required lazily; bundling cannot supply it.
+	external: ['vscode', 'node:sqlite'],
 	sourcemap: !production,
 	minify: production,
 	logLevel: 'info',

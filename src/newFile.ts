@@ -1,18 +1,25 @@
 /**
  * "DreamUI: New .dui File" -- the empty-state door. From the explorer context menu the file lands
- * in the clicked folder; from the palette it lands in the workspace's DUI/ directory when there
- * is one. Refuses to overwrite: a create that can silently replace someone's interface is not
+ * in the clicked folder; from the palette it lands in the project's UI source folder
+ * (`DreamSource/UI/` unless configured otherwise, or the old `DUI/` while that is still in use). Refuses to overwrite: a create that can silently replace someone's interface is not
  * worth the click it saves.
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { duiStarter } from './core/templates';
+import { DreamSourceHost } from './dreamSourceHost';
 
-function defaultDirectory(): string | undefined {
+function defaultDirectory(host: DreamSourceHost): string | undefined {
     const active = vscode.window.activeTextEditor?.document;
     if (active && active.uri.scheme === 'file' && active.fileName.toLowerCase().endsWith('.dui')) {
         return path.dirname(active.fileName);
+    }
+    // The project's UI source folder: the one in use, or the configured one (made on first use).
+    const projectDir = host.projectDirFor(active?.uri.scheme === 'file' ? active.fileName : undefined);
+    if (projectDir) {
+        const root = host.sourceRoot(projectDir);
+        return root.activeDir ?? root.configuredDir;
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
         const dui = path.join(folder.uri.fsPath, 'DUI');
@@ -23,9 +30,9 @@ function defaultDirectory(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
-export function registerNewFile(context: vscode.ExtensionContext): void {
+export function registerNewFile(context: vscode.ExtensionContext, host: DreamSourceHost): void {
     context.subscriptions.push(vscode.commands.registerCommand('dreamui.newFile', async (clicked?: vscode.Uri) => {
-        const directory = clicked?.fsPath ?? defaultDirectory();
+        const directory = clicked?.fsPath ?? defaultDirectory(host);
         if (!directory) {
             vscode.window.showErrorMessage('DreamUI: open a folder first -- a .dui needs somewhere to live.');
             return;
@@ -55,6 +62,7 @@ export function registerNewFile(context: vscode.ExtensionContext): void {
             return;
         }
 
+        fs.mkdirSync(directory, { recursive: true });
         fs.writeFileSync(filePath, duiStarter(`${base}.dui`, `/Game/UI/WBP_${base}`, base), 'utf8');
         const document = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(document);
