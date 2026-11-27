@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.13.0)
+## 0.13.0 — 2026-11-27
 
 Follows DreamGUI into the DreamSource layout. Needs VS Code 1.147 or later (its Node has `node:sqlite`).
 
